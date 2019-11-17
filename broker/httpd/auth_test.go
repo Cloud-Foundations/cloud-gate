@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/Cloud-Foundations/Dominator/lib/log/debuglogger"
-	"github.com/Symantec/cloud-gate/broker/staticconfiguration"
-	"github.com/Symantec/cloud-gate/lib/constants"
+	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
+	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 )
 
 func TestOauth2RedirectHandlerSucccess(t *testing.T) {

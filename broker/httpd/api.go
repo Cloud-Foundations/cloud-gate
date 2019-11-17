@@ -21,11 +21,11 @@ import (
 	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/Dominator/lib/log/serverlogger"
 	"github.com/Cloud-Foundations/Dominator/lib/logbuf"
-	"github.com/Symantec/cloud-gate/broker"
-	"github.com/Symantec/cloud-gate/broker/configuration"
-	"github.com/Symantec/cloud-gate/broker/staticconfiguration"
-	"github.com/Symantec/cloud-gate/lib/constants"
-	"github.com/Symantec/cloud-gate/lib/userinfo"
+	"github.com/Cloud-Foundations/cloud-gate/broker"
+	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
+	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
+	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
+	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
 	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 )
 

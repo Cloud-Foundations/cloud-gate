@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Cloud-Foundations/Dominator/lib/log/debuglogger"
-	"github.com/Symantec/cloud-gate/broker"
+	"github.com/Cloud-Foundations/cloud-gate/broker"
 )
 
 const credentialsFilename = "/credentials-filename"

@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 
-	"github.com/Symantec/cloud-gate/broker"
+	"github.com/Cloud-Foundations/cloud-gate/broker"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"

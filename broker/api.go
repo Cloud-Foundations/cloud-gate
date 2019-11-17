@@ -3,7 +3,7 @@ package broker
 import (
 	"time"
 
-	"github.com/Symantec/cloud-gate/broker/configuration"
+	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
 )
 
 type PermittedAccount struct {

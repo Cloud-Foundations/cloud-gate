@@ -5,7 +5,7 @@ Summary:        Access broker for clouds
 
 #Group:
 License:        ASL 2.0
-URL:            https://github.com/Symantec/cloud-gate/
+URL:            https://github.com/Cloud-Foundations/cloud-gate/
 Source0:        cloud-gate-%{version}.tar.gz
 
 #BuildRequires: golang

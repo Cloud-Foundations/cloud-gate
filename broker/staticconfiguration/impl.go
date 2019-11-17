@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/Symantec/cloud-gate/lib/constants"
+	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 	"gopkg.in/yaml.v2"
 )
 

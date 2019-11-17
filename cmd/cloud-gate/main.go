@@ -17,14 +17,14 @@ import (
 	"github.com/Cloud-Foundations/Dominator/lib/log/serverlogger"
 	"github.com/Cloud-Foundations/Dominator/lib/log/teelogger"
 	"github.com/Cloud-Foundations/tricorder/go/tricorder"
-	"github.com/Symantec/cloud-gate/broker"
-	"github.com/Symantec/cloud-gate/broker/aws"
-	"github.com/Symantec/cloud-gate/broker/configuration"
-	"github.com/Symantec/cloud-gate/broker/httpd"
-	"github.com/Symantec/cloud-gate/broker/staticconfiguration"
-	"github.com/Symantec/cloud-gate/lib/userinfo"
-	"github.com/Symantec/cloud-gate/lib/userinfo/gitdb"
-	"github.com/Symantec/cloud-gate/lib/userinfo/ldap"
+	"github.com/Cloud-Foundations/cloud-gate/broker"
+	"github.com/Cloud-Foundations/cloud-gate/broker/aws"
+	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
+	"github.com/Cloud-Foundations/cloud-gate/broker/httpd"
+	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
+	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
+	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/gitdb"
+	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/ldap"
 )
 
 var (

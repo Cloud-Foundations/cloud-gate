@@ -8,7 +8,7 @@ BINARY=cloud-gate
 VERSION=0.7.7
 
 all:
-	@cd $(GOPATH)/src; go install github.com/Symantec/cloud-gate/cmd/*
+	@cd $(GOPATH)/src; go install github.com/Cloud-Foundations/cloud-gate/cmd/*
 
 
 get-deps:
@@ -42,5 +42,5 @@ format-imports:
 
 test:
 	@find * -name '*_test.go' |\
-	sed -e 's@^@github.com/Symantec/cloud-gate/@' -e 's@/[^/]*$$@@' |\
+	sed -e 's@^@github.com/Cloud-Foundations/cloud-gate/@' -e 's@/[^/]*$$@@' |\
 	sort -u | xargs go test

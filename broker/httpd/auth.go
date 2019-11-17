@@ -16,7 +16,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 
-	"github.com/Symantec/cloud-gate/lib/constants"
+	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 )
 
 type oauth2StateJWT struct {
