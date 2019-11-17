@@ -16,7 +16,6 @@ import (
 	"github.com/Cloud-Foundations/Dominator/lib/log/debuglogger"
 	"github.com/Cloud-Foundations/Dominator/lib/log/serverlogger"
 	"github.com/Cloud-Foundations/Dominator/lib/log/teelogger"
-	"github.com/Cloud-Foundations/tricorder/go/tricorder"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/aws"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
@@ -25,6 +24,7 @@ import (
 	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
 	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/gitdb"
 	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/ldap"
+	"github.com/Cloud-Foundations/tricorder/go/tricorder"
 )
 
 var (
