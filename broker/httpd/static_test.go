@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Symantec/keymaster/lib/instrumentedwriter"
+	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 
 func checkRequestHandlerCode(req *http.Request, handlerFunc http.HandlerFunc, expectedStatus int) (*httptest.ResponseRecorder, error) {

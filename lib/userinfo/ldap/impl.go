@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Cloud-Foundations/Dominator/lib/log"
-	"github.com/Symantec/keymaster/lib/authutil"
+	"github.com/Cloud-Foundations/keymaster/lib/authutil"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

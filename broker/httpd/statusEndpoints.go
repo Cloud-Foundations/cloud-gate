@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Symantec/keymaster/lib/instrumentedwriter"
+	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 
 func (s *Server) displayUnsealForm(w http.ResponseWriter, r *http.Request, authUser string) {

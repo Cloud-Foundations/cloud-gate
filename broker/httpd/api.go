@@ -26,7 +26,7 @@ import (
 	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
 	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
-	"github.com/Symantec/keymaster/lib/instrumentedwriter"
+	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 
 type HtmlWriter interface {
