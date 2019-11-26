@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Symantec/keymaster/lib/instrumentedwriter"
+	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 
 func (s *Server) getPreferredAcceptType(r *http.Request) string {

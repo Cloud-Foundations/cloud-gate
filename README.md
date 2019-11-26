@@ -3,7 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cloud-Foundations/cloud-gate)](https://goreportcard.com/report/github.com/Cloud-Foundations/cloud-gate)
 
 cloud-gate is a Cloud Authentication Broker. It uses an IDentity Provider (IDP)
-such as [keymaster](https://github.com/Symantec/keymaster) to authenticate users
+such as [keymaster](https://github.com/Cloud-Foundations/keymaster) to authenticate users
 and then grants WebUI and API access to accounts and roles in a Cloud
 environment.
 
