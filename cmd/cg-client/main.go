@@ -36,7 +36,7 @@ var (
 	userAgentString = userAgentAppName
 )
 
-const defaultOutputProfilePrefix = "saml-"
+const defaultOutputProfilePrefix = ""
 
 var (
 	certFilename         = flag.String("cert", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.cert"), "A PEM eoncoded certificate file.")
@@ -45,7 +45,7 @@ var (
 	crededentialFilename = flag.String("credentialFile", filepath.Join(getUserHomeDir(), ".aws", "credentials"), "An Ini file with credentials")
 	askAdminRoles        = flag.Bool("askAdminRoles", false, "ask also for admin roles")
 	outputProfilePrefix  = flag.String("outputProfilePrefix", defaultOutputProfilePrefix, "prefix to put to profile names $PREFIX$accountName-$roleName")
-	lowerCaseProfileName = flag.Bool("lowerCaseProfileName", true, "ask also for admin roles")
+	lowerCaseProfileName = flag.Bool("lowerCaseProfileName", false, "ask also for admin roles")
 	configFilename       = flag.String("configFile", filepath.Join(getUserHomeDir(), ".config", "cloud-gate", "config.yml"), "An Ini file with credentials")
 	oldBotoCompat        = flag.Bool("oldBotoCompat", false, "add aws_security_token for OLD boto installations (not recommended)")
 	includeRoleREFilter  = flag.String("includeRoleREFilter", "", "Positive RE filter that role/account MUST match")
@@ -119,7 +119,7 @@ func saveDefaultConfig(configFilename string) error {
 	config := AppConfigFile{
 		BaseURL:              DefaultBaseURL,
 		OutputProfilePrefix:  defaultOutputProfilePrefix,
-		LowerCaseProfileName: true,
+		LowerCaseProfileName: false,
 	}
 	configBytes, err := yaml.Marshal(config)
 	if err != nil {
