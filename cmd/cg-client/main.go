@@ -39,9 +39,10 @@ var (
 const defaultOutputProfilePrefix = ""
 
 var (
-	certFilename         = flag.String("cert", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.cert"), "A PEM eoncoded certificate file.")
-	keyFilename          = flag.String("key", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.key"), "A PEM encoded private key file.")
-	baseURL              = flag.String("baseURL", "", "location of the cloud-broker")
+	certFilename = flag.String("cert", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.cert"), "A PEM eoncoded certificate file.")
+	keyFilename  = flag.String("key", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.key"), "A PEM encoded private key file.")
+	baseURL      = flag.String("baseURL", DefaultBaseURL,
+		"location of the cloud-broker")
 	crededentialFilename = flag.String("credentialFile", filepath.Join(getUserHomeDir(), ".aws", "credentials"), "An Ini file with credentials")
 	askAdminRoles        = flag.Bool("askAdminRoles", false, "ask also for admin roles")
 	outputProfilePrefix  = flag.String("outputProfilePrefix", defaultOutputProfilePrefix, "prefix to put to profile names $PREFIX$accountName-$roleName")
@@ -117,7 +118,7 @@ func loadVerifyConfigFile(filename string) (AppConfigFile, error) {
 func saveDefaultConfig(configFilename string) error {
 	os.MkdirAll(filepath.Dir(configFilename), 0755)
 	config := AppConfigFile{
-		BaseURL:              DefaultBaseURL,
+		BaseURL:              *baseURL,
 		OutputProfilePrefix:  defaultOutputProfilePrefix,
 		LowerCaseProfileName: false,
 	}
@@ -394,9 +395,6 @@ func main() {
 	}
 	if *outputProfilePrefix != defaultOutputProfilePrefix {
 		config.OutputProfilePrefix = *outputProfilePrefix
-	}
-	if *baseURL != "" {
-		config.BaseURL = *baseURL
 	}
 	// Because we want to display a sensible error message when using flags
 	// and we cannot tell using the flags package if a value has been modified
