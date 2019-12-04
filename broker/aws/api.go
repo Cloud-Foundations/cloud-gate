@@ -8,7 +8,7 @@ import (
 	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
-	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
 )
 
 type userAllowedCredentialsCacheEntry struct {
