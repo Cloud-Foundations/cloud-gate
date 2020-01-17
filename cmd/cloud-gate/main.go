@@ -40,6 +40,8 @@ func getUserInfo(config *staticconfiguration.StaticConfiguration,
 			strings.Split(config.Ldap.LDAPTargetURLs, ","),
 			config.Ldap.BindUsername,
 			config.Ldap.BindPassword,
+			config.Ldap.GroupSearchFilter,
+			config.Ldap.GroupSearchBaseDNs,
 			config.Ldap.UserSearchFilter,
 			config.Ldap.UserSearchBaseDNs,
 			uint(timeoutSecs), nil, logger)

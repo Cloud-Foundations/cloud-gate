@@ -17,6 +17,10 @@ import (
 	"golang.org/x/crypto/openpgp/armor"
 
 	"github.com/Cloud-Foundations/cloud-gate/broker"
+	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/filter"
+	"github.com/Cloud-Foundations/golib/pkg/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -34,6 +38,26 @@ const (
 	defaultRegion        = "us-west-2"
 	masterAWSProfileName = "broker-master"
 )
+
+func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
+	listRolesRoleName string, logger log.DebugLogger,
+	auditLogger log.DebugLogger) *Broker {
+	if listRolesRoleName == "" {
+		listRolesRoleName = defaultListRolesRoleName
+	}
+	return &Broker{
+		rawUserInfo:         userInfo,
+		credentialsFilename: credentialsFilename,
+		logger:              logger,
+		auditLogger:         auditLogger,
+		listRolesRoleName:   listRolesRoleName,
+		userAllowedCredentialsCache: make(
+			map[string]userAllowedCredentialsCacheEntry),
+		accountRoleCache:   make(map[string]accountRoleCacheEntry),
+		isUnsealedChannel:  make(chan error, 1),
+		profileCredentials: make(map[string]awsProfileEntry),
+	}
+}
 
 func (b *Broker) accountIDFromName(accountName string) (string, error) {
 	for _, account := range b.config.AWS.Account {
@@ -418,8 +442,7 @@ func (b *Broker) getUserAllowedAccountsNonCached(username string) ([]broker.Perm
 	if b.config == nil {
 		return nil, errors.New("nil config")
 	}
-	prefix := b.config.AWS.GroupPrefix
-	userGroups, err := b.userInfo.GetUserGroups(username, &prefix)
+	userGroups, err := b.userInfo.GetUserGroups(username)
 	if err != nil {
 		return nil, err
 	}
@@ -597,4 +620,24 @@ func (b *Broker) generateTokenCredentials(accountName string, roleName string, u
 	}
 	b.auditLogger.Printf("Token credentials generated for: %s on account %s role %s", userName, accountName, roleName)
 	return &outVal, nil
+}
+
+func (b *Broker) updateConfiguration(
+	config *configuration.Configuration) error {
+	if config == nil {
+		return errors.New("nill config passed")
+	}
+	if config.AWS.GroupPrefix == "" {
+		b.userInfo = b.rawUserInfo
+	} else {
+		ui, err := filter.NewUserGroupsFilter(b.rawUserInfo,
+			"^"+config.AWS.GroupPrefix)
+		if err != nil {
+			return err
+		}
+		b.userInfo = ui
+	}
+	b.logger.Debugf(1, "config=%+v", *config)
+	b.config = config
+	return nil
 }
