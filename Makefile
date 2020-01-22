@@ -5,7 +5,7 @@ GOPATH ?= ${shell go env GOPATH}
 BINARY=cloud-gate
 #
 # # These are the values we want to pass for Version and BuildTime
-VERSION=0.7.7
+VERSION=1.0.0
 
 all:
 	@cd $(GOPATH)/src; go install github.com/Cloud-Foundations/cloud-gate/cmd/*

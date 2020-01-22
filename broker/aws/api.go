@@ -1,14 +1,13 @@
 package aws
 
 import (
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
-	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
 )
 
 type userAllowedCredentialsCacheEntry struct {
@@ -31,7 +30,8 @@ const defaultListRolesRoleName = "CPEBrokerRole"
 
 type Broker struct {
 	config                      *configuration.Configuration
-	userInfo                    userinfo.UserInfo
+	userInfo                    userinfo.UserGroupsGetter
+	rawUserInfo                 userinfo.UserGroupsGetter
 	credentialsFilename         string
 	logger                      log.DebugLogger
 	auditLogger                 log.DebugLogger
@@ -45,33 +45,16 @@ type Broker struct {
 	listRolesRoleName           string
 }
 
-func New(userInfo userinfo.UserInfo,
-	credentialsFilename string,
-	listRolesRoleName string,
-	logger log.DebugLogger, auditLogger log.DebugLogger) *Broker {
-	if listRolesRoleName == "" {
-		listRolesRoleName = defaultListRolesRoleName
-	}
-	return &Broker{userInfo: userInfo,
-		credentialsFilename:         credentialsFilename,
-		logger:                      logger,
-		auditLogger:                 auditLogger,
-		listRolesRoleName:           listRolesRoleName,
-		userAllowedCredentialsCache: make(map[string]userAllowedCredentialsCacheEntry),
-		accountRoleCache:            make(map[string]accountRoleCacheEntry),
-		isUnsealedChannel:           make(chan error, 1),
-		profileCredentials:          make(map[string]awsProfileEntry),
-	}
+func New(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
+	listRolesRoleName string, logger log.DebugLogger,
+	auditLogger log.DebugLogger) *Broker {
+	return newBroker(userInfo, credentialsFilename, listRolesRoleName, logger,
+		auditLogger)
 }
 
 func (b *Broker) UpdateConfiguration(
 	config *configuration.Configuration) error {
-	if config == nil {
-		return errors.New("nill config passed")
-	}
-	b.logger.Debugf(1, "config=%+v", *config)
-	b.config = config
-	return nil
+	return b.updateConfiguration(config)
 }
 
 func (b *Broker) GetUserAllowedAccounts(username string) ([]broker.PermittedAccount, error) {

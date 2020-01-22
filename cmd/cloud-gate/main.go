@@ -21,9 +21,9 @@ import (
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
 	"github.com/Cloud-Foundations/cloud-gate/broker/httpd"
 	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
-	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo"
-	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/gitdb"
-	"github.com/Cloud-Foundations/cloud-gate/lib/userinfo/ldap"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/gitdb"
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/ldap"
 	"github.com/Cloud-Foundations/tricorder/go/tricorder"
 )
 
@@ -40,6 +40,8 @@ func getUserInfo(config *staticconfiguration.StaticConfiguration,
 			strings.Split(config.Ldap.LDAPTargetURLs, ","),
 			config.Ldap.BindUsername,
 			config.Ldap.BindPassword,
+			config.Ldap.GroupSearchFilter,
+			config.Ldap.GroupSearchBaseDNs,
 			config.Ldap.UserSearchFilter,
 			config.Ldap.UserSearchBaseDNs,
 			uint(timeoutSecs), nil, logger)
@@ -50,6 +52,7 @@ func getUserInfo(config *staticconfiguration.StaticConfiguration,
 	}
 	if config.GitDB.LocalRepositoryDirectory != "" {
 		userInfo, err := gitdb.New(config.GitDB.RepositoryURL,
+			config.GitDB.Branch,
 			config.GitDB.LocalRepositoryDirectory,
 			config.GitDB.CheckInterval, logger)
 		if err != nil {
