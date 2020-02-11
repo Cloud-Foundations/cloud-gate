@@ -26,6 +26,7 @@ import (
 	"github.com/Cloud-Foundations/cloud-gate/broker/staticconfiguration"
 	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
+	acmecfg "github.com/Cloud-Foundations/golib/pkg/crypto/certmanager/config"
 	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 
@@ -97,7 +98,12 @@ func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
 		return nil, err
 	}
 	authCookieName = constants.AuthCookieName + "_" + authCookieSuffix[0:6]
-
+	cm, err := acmecfg.New(staticConfig.Base.TLSCertFilename,
+		staticConfig.Base.TLSKeyFilename, staticConfig.Base.HttpRedirectPort,
+		staticConfig.Base.ACME, logger)
+	if err != nil {
+		return nil, err
+	}
 	statusListener, err := net.Listen("tcp", fmt.Sprintf(":%d", staticConfig.Base.StatusPort))
 	if err != nil {
 		return nil, err
@@ -138,7 +144,7 @@ func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
 		}
 	}
 
-	/// Load the oter built in templates
+	/// Load the other built in templates
 	extraTemplates := []string{footerTemplateText,
 		consoleAccessTemplateText,
 		generateTokaneTemplateText,
@@ -188,8 +194,9 @@ func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 		},
-		ClientAuth: tls.VerifyClientCertIfGiven,
-		ClientCAs:  clientCACertPool,
+		ClientAuth:     tls.VerifyClientCertIfGiven,
+		ClientCAs:      clientCACertPool,
+		GetCertificate: cm.GetCertificate,
 	}
 	l := httpLogger{AccessLogger: server.accessLogger}
 	adminSrv := &http.Server{
@@ -200,9 +207,7 @@ func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
 		IdleTimeout:  120 * time.Second,
 	}
 	go func() {
-		err := adminSrv.ServeTLS(statusListener,
-			staticConfig.Base.TLSCertFilename,
-			staticConfig.Base.TLSKeyFilename)
+		err := adminSrv.ServeTLS(statusListener, "", "")
 		if err != nil {
 			logger.Fatalf("Failed to start status server, err=%s", err)
 		}
@@ -225,7 +230,7 @@ func (s *Server) StartServicePort() error {
 	}
 	c1 := make(chan error, 1)
 	go func() {
-		err := serviceServer.ServeTLS(serviceListener, s.staticConfig.Base.TLSCertFilename, s.staticConfig.Base.TLSKeyFilename)
+		err := serviceServer.ServeTLS(serviceListener, "", "")
 		c1 <- err
 	}()
 	go func() {
