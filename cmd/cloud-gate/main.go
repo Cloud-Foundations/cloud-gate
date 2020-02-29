@@ -51,10 +51,7 @@ func getUserInfo(config *staticconfiguration.StaticConfiguration,
 		return userInfo, nil
 	}
 	if config.GitDB.LocalRepositoryDirectory != "" {
-		userInfo, err := gitdb.New(config.GitDB.RepositoryURL,
-			config.GitDB.Branch,
-			config.GitDB.LocalRepositoryDirectory,
-			config.GitDB.CheckInterval, logger)
+		userInfo, err := gitdb.NewWithConfig(config.GitDB.Config, logger)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create GitDB userinfo: %s", err)
 		}

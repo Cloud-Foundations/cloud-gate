@@ -2,6 +2,8 @@ package staticconfiguration
 
 import (
 	"time"
+
+	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/gitdb"
 )
 
 type BaseConfig struct {
@@ -21,10 +23,7 @@ type BaseConfig struct {
 }
 
 type GitDatabaseConfig struct {
-	Branch                   string        `yaml:"branch"`
-	CheckInterval            time.Duration `yaml:"check_interval"`
-	LocalRepositoryDirectory string        `yaml:"local_repository_directory"`
-	RepositoryURL            string        `yaml:"repository_url"`
+	gitdb.Config `yaml:",inline"`
 }
 
 type OpenIDConfig struct {
