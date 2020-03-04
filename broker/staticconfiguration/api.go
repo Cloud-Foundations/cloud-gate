@@ -4,9 +4,12 @@ import (
 	"time"
 
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/gitdb"
+	acmecfg "github.com/Cloud-Foundations/golib/pkg/crypto/certmanager/config"
 )
 
 type BaseConfig struct {
+	ACME                              acmecfg.AcmeConfig
+	HttpRedirectPort                  uint16        `yaml:"http_redirect_port"`
 	ServicePort                       uint16        `yaml:"service_port"`
 	StatusPort                        uint16        `yaml:"status_port"`
 	TLSCertFilename                   string        `yaml:"tls_cert_filename"`
