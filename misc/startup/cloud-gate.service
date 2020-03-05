@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloud Broker Service
+After=network.target
+
+[Service]
+PermissionsStartOnly=true
+ExecStartPre=/sbin/setcap cap_net_bind_service=+ep /usr/bin/cloud-gate
+ExecStart=/usr/bin/cloud-gate -config /etc/cloud-gate/static-config.yml
+Restart=always
+RestartSec=20
+User=cloud-gate
+Group=cloud-gate
+
+[Install]
+WantedBy=multi-user.target
