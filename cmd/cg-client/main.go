@@ -431,6 +431,9 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	if *baseURL != DefaultBaseURL {
+		config.BaseURL = *baseURL
+	}
 
 	loggerPrintf(1, "Configuration Loaded")
 	loggerPrintf(2, "config=%+v", config)
