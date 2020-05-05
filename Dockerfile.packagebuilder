@@ -1,0 +1,24 @@
+FROM golang:1.14-stretch
+RUN set -ex; \
+    apt update; \
+    apt install -y git make gcc time musl-dev rpm rsync alien
+ARG GIT_COMMIT
+ARG GIT_BRANCH
+RUN git clone https://github.com/Cloud-Foundations/cloud-gate $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
+
+WORKDIR $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
+RUN echo $GOPATH
+RUN echo $HOME
+RUN echo $GIT_BRANCH
+RUN git branch -a
+RUN git checkout $GIT_BRANCH
+RUN git rev-parse --abbrev-ref HEAD
+RUN git log -1 --pretty=format:"%H"
+RUN time go get -u ./...
+RUN time go get -t ./...
+
+# install
+COPY cloud-gate.spec-docker.patch $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
+RUN patch cloud-gate.spec cloud-gate.spec-docker.patch
+RUN make rpm
+RUN alien -d -c `find /root/rpmbuild/RPMS/x86_64/ -name *.rpm`

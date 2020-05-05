@@ -1,5 +1,12 @@
 GOPATH ?= ${shell go env GOPATH}
 
+GIT_COMMIT ?= $(shell git log -1 --pretty=format:"%H")
+
+# jenkins/github integration sets the GIT_BRANCH for you including the remote
+# so we first create the variable if not exists and then take the
+# last element
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_BRANCH2 = $(shell echo ${GIT_BRANCH} | rev | cut -d/ -f1 | rev)
 
 # This is how we want to name the binary output
 BINARY=cloud-gate
@@ -44,3 +51,11 @@ test:
 	@find * -name '*_test.go' |\
 	sed -e 's@^@github.com/Cloud-Foundations/cloud-gate/@' -e 's@/[^/]*$$@@' |\
 	sort -u | xargs go test
+
+
+dockerpackagebuild:
+	@echo GIT_COMMIT=$(GIT_COMMIT)
+	@echo GIT_BRANCH2=$(GIT_BRANCH2)
+	docker build -f Dockerfile.packagebuilder --build-arg GIT_COMMIT=$(GIT_COMMIT) -t cloud-gate-packagebuilder .
+	docker run cloud-gate-packagebuilder cat cloud-gate_${VERSION}-2_amd64.deb > cloud-gate_${VERSION}-2_amd64.deb
+	docker run cloud-gate-packagebuilder cat /go/bin/cloud-gate > cloud-gate.linux
