@@ -89,8 +89,7 @@ func (s *Server) GetIsReady() bool {
 }
 
 func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
-	userInfo userinfo.UserInfo,
-	brokers map[string]broker.Broker,
+	userInfo userinfo.UserInfo, brokers map[string]broker.Broker,
 	logger log.DebugLogger) (*Server, error) {
 
 	authCookieSuffix, err := randomStringGeneration()
@@ -215,6 +214,9 @@ func StartServer(staticConfig *staticconfiguration.StaticConfiguration,
 			logger.Fatalf("Failed to start status server, err=%s", err)
 		}
 	}()
+	if err := server.setupHA(); err != nil {
+		return nil, err
+	}
 	return server, nil
 }
 

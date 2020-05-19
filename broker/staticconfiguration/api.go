@@ -5,6 +5,7 @@ import (
 
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/gitdb"
 	acmecfg "github.com/Cloud-Foundations/golib/pkg/crypto/certmanager/config"
+	dnslbcfg "github.com/Cloud-Foundations/golib/pkg/loadbalancing/dnslb/config"
 )
 
 type BaseConfig struct {
@@ -50,8 +51,9 @@ type UserInfoLDAPSource struct {
 }
 
 type StaticConfiguration struct {
-	Base   BaseConfig
-	GitDB  GitDatabaseConfig
-	OpenID OpenIDConfig
-	Ldap   UserInfoLDAPSource
+	Base            BaseConfig
+	DnsLoadBalancer dnslbcfg.Config `yaml:"dns_load_balancer"`
+	GitDB           GitDatabaseConfig
+	OpenID          OpenIDConfig
+	Ldap            UserInfoLDAPSource
 }
