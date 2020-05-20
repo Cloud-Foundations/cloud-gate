@@ -4,6 +4,7 @@ import (
 	"time"
 
 	dnslbcfg "github.com/Cloud-Foundations/golib/pkg/loadbalancing/dnslb/config"
+	"github.com/Cloud-Foundations/golib/pkg/watchdog"
 )
 
 func (s *Server) performStateCleanup(secsBetweenCleanup int) {
@@ -26,6 +27,12 @@ func (s *Server) setupHA() error {
 		_, err := dnslbcfg.New(s.staticConfig.DnsLoadBalancer, s.logger)
 		if err != nil {
 			return err
+		}
+	}
+	if s.staticConfig.Watchdog.CheckInterval > 0 {
+		_, err := watchdog.New(s.staticConfig.Watchdog, s.logger)
+		if err != nil {
+			s.logger.Fatalln(err)
 		}
 	}
 	return nil

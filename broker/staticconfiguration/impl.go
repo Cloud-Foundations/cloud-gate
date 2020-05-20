@@ -35,6 +35,7 @@ func getClusterSecretsFile(clusterSecretsFilename string) ([]string, error) {
 
 func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 	var config StaticConfiguration
+	config.Watchdog.SetDefaults()
 	if _, err := os.Stat(configFilename); os.IsNotExist(err) {
 		err = errors.New("mising config file failure")
 		return nil, err
@@ -93,6 +94,10 @@ func (config *StaticConfiguration) setupHA() error {
 		if config.DnsLoadBalancer.TcpPort < 1 {
 			config.DnsLoadBalancer.TcpPort = config.Base.StatusPort
 		}
+	}
+	config.Watchdog.DoTLS = true
+	if config.Watchdog.CheckInterval > 0 && config.Watchdog.TcpPort < 1 {
+		config.Watchdog.TcpPort = config.Base.StatusPort
 	}
 	return nil
 }
