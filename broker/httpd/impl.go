@@ -32,7 +32,7 @@ func (s *Server) setupHA() error {
 	if s.staticConfig.Watchdog.CheckInterval > 0 {
 		_, err := watchdog.New(s.staticConfig.Watchdog, s.logger)
 		if err != nil {
-			s.logger.Fatalln(err)
+			return err
 		}
 	}
 	return nil
