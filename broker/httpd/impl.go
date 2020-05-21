@@ -20,7 +20,7 @@ func (s *Server) performStateCleanup(secsBetweenCleanup int) {
 }
 
 func (s *Server) setupHA() error {
-	if hasDnsLB, err := s.staticConfig.DnsLoadBalancer.HasDNS(); err != nil {
+	if hasDnsLB, err := s.staticConfig.DnsLoadBalancer.Check(); err != nil {
 		return err
 	} else if hasDnsLB {
 		_, err := dnslbcfg.New(s.staticConfig.DnsLoadBalancer, s.logger)

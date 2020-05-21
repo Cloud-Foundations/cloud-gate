@@ -86,7 +86,7 @@ func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 }
 
 func (config *StaticConfiguration) setupHA() error {
-	if hasDnsLB, err := config.DnsLoadBalancer.HasDNS(); err != nil {
+	if hasDnsLB, err := config.DnsLoadBalancer.Check(); err != nil {
 		return err
 	} else if hasDnsLB {
 		config.DnsLoadBalancer.DoTLS = true
