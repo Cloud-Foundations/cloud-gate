@@ -24,7 +24,6 @@ func getClusterSecretsFile(clusterSecretsFilename string) ([]string, error) {
 		}
 		rarray = append(rarray, line)
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
@@ -43,7 +42,6 @@ func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 	source, err := os.Open(configFilename)
 	if err != nil {
 		return nil, err
-
 	}
 	err = yaml.NewDecoder(source).Decode(&config)
 	if err != nil {
@@ -72,15 +70,29 @@ func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 		len(config.OpenID.ClientID) < 1 {
 		return nil, errors.New("invalid openid config")
 	}
-
+	if err := config.setupHA(); err != nil {
+		return nil, err
+	}
 	// Verify shared secrets
 	if len(config.Base.ClusterSharedSecretFilename) < 0 {
 		return nil, errors.New("missing shared cluster secrets")
 	}
-	config.Base.SharedSecrets, err = getClusterSecretsFile(config.Base.ClusterSharedSecretFilename)
+	config.Base.SharedSecrets, err = getClusterSecretsFile(
+		config.Base.ClusterSharedSecretFilename)
 	if err != nil {
 		return nil, err
 	}
-
 	return &config, nil
+}
+
+func (config *StaticConfiguration) setupHA() error {
+	if hasDnsLB, err := config.DnsLoadBalancer.Check(); err != nil {
+		return err
+	} else if hasDnsLB {
+		config.DnsLoadBalancer.DoTLS = true
+		if config.DnsLoadBalancer.TcpPort < 1 {
+			config.DnsLoadBalancer.TcpPort = config.Base.StatusPort
+		}
+	}
+	return nil
 }
