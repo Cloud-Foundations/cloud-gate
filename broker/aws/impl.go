@@ -2,6 +2,7 @@ package aws
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -80,6 +82,8 @@ func init() {
 	prometheus.MustRegister(awsAssumeRoleSuccess)
 }
 
+const maxRoleRequestsInFlight = 10
+
 func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
 	listRolesRoleName string, logger log.DebugLogger,
 	auditLogger log.DebugLogger) *Broker {
@@ -92,6 +96,7 @@ func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
 		logger:              logger,
 		auditLogger:         auditLogger,
 		listRolesRoleName:   listRolesRoleName,
+		listRolesSemaphore:  semaphore.NewWeighted(int64(maxRoleRequestsInFlight)),
 		userAllowedCredentialsCache: make(
 			map[string]userAllowedCredentialsCacheEntry),
 		accountRoleCache:   make(map[string]accountRoleCacheEntry),
@@ -292,6 +297,14 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accoun
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
 	var roleNames []string
+
+	ctx := context.TODO()
+	if err := b.listRolesSemaphore.Acquire(ctx, 1); err != nil {
+		b.logger.Printf("Failed to acquire semaphore: %v", err)
+		return nil, err
+	}
+	defer b.listRolesSemaphore.Release(1)
+
 	c := make(chan error, 1)
 	go func() {
 		awsListRolesAttempt.WithLabelValues(accountName).Inc()
