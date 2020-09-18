@@ -283,30 +283,40 @@ func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 	return assumeRoleOutput, region, err
 }
 
+const getAWSRolesTimeout = 10 * time.Second
+
 func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accountName string) ([]string, error) {
 	iamClient := iam.New(validSession)
 	var maxItems int64
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
-
 	var roleNames []string
-	awsListRolesAttempt.WithLabelValues(accountName).Inc()
-	err := iamClient.ListRolesPages(&listRolesInput,
-		func(listRolesOutput *iam.ListRolesOutput, lastPage bool) bool {
-			b.logger.Debugf(2, "listrolesoutput =%v", listRolesOutput)
-			b.logger.Debugf(2, "loop, lastPage=%s", lastPage)
-			for _, role := range listRolesOutput.Roles {
-				roleNames = append(roleNames, *role.RoleName)
-			}
-			return !lastPage
-		})
-	if err != nil {
-		return nil, err
+	c := make(chan error)
+	go func() {
+		awsListRolesAttempt.WithLabelValues(accountName).Inc()
+		err := iamClient.ListRolesPages(&listRolesInput,
+			func(listRolesOutput *iam.ListRolesOutput, lastPage bool) bool {
+				b.logger.Debugf(2, "listrolesoutput =%v", listRolesOutput)
+				b.logger.Debugf(2, "loop, lastPage=%s", lastPage)
+				for _, role := range listRolesOutput.Roles {
+					roleNames = append(roleNames, *role.RoleName)
+				}
+				return !lastPage
+			})
+		c <- err
+	}()
+	select {
+	case getRolesErr := <-c:
+		if getRolesErr != nil {
+			return nil, getRolesErr
+		}
+		awsListRolesSuccess.WithLabelValues(accountName).Inc()
+		sort.Strings(roleNames)
+		b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
+		return roleNames, nil
+	case <-time.After(getAWSRolesTimeout):
+		return nil, fmt.Errorf("AWS Get roles had a timeout for account %s", accountName)
 	}
-	awsListRolesSuccess.WithLabelValues(accountName).Inc()
-	sort.Strings(roleNames)
-	b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
-	return roleNames, nil
 }
 
 func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, error) {
