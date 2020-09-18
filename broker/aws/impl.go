@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/openpgp"
@@ -410,30 +411,39 @@ func (b *Broker) getUserAllowedAccountsFromGroups(userGroups []string) ([]broker
 	}
 	b.logger.Debugf(1, "allowedRoles(post)=%v", allowedRoles)
 	var permittedAccounts []broker.PermittedAccount
+	var mux sync.Mutex
+	var wg sync.WaitGroup
 	for groupName, allowedRoles := range allowedRoles {
 		accountName, ok := groupToAccountName[groupName]
 		if !ok {
 			return nil, errors.New("Cannot map to accountname for some username")
 		}
-		rolesForAccount, err := b.getAWSRolesForAccount(accountName)
-		if err != nil {
-			b.logger.Printf("Error getting profile for account %s: %s", accountName, err)
-			continue
-		}
-		allowedAndAvailable := stringIntersectionNoDups(rolesForAccount, allowedRoles)
-		if len(allowedAndAvailable) < 1 {
-			continue
-		}
-		sort.Strings(allowedAndAvailable)
 		displayName, err := b.accountHumanNameFromName(accountName)
 		if err != nil {
 			return nil, err
 		}
-		var account = broker.PermittedAccount{Name: accountName,
-			HumanName:         displayName,
-			PermittedRoleName: allowedAndAvailable}
-		permittedAccounts = append(permittedAccounts, account)
+		wg.Add(1)
+		go func(accountName string, displayName string) {
+			defer wg.Done()
+			rolesForAccount, err := b.getAWSRolesForAccount(accountName)
+			if err != nil {
+				b.logger.Printf("Error getting profile for account %s: %s", accountName, err)
+				return
+			}
+			allowedAndAvailable := stringIntersectionNoDups(rolesForAccount, allowedRoles)
+			if len(allowedAndAvailable) < 1 {
+				return
+			}
+			sort.Strings(allowedAndAvailable)
+			var account = broker.PermittedAccount{Name: accountName,
+				HumanName:         displayName,
+				PermittedRoleName: allowedAndAvailable}
+			mux.Lock()
+			defer mux.Unlock()
+			permittedAccounts = append(permittedAccounts, account)
+		}(accountName, displayName)
 	}
+	wg.Wait()
 	b.logger.Debugf(1, "permittedAccounts=%+v", permittedAccounts)
 	return permittedAccounts, nil
 }
