@@ -73,7 +73,6 @@ var (
 )
 
 func init() {
-	//prometheus.MustRegister(dependencyLatency)
 	prometheus.MustRegister(awsListRolesAttempt)
 	prometheus.MustRegister(awsListRolesSuccess)
 	prometheus.MustRegister(awsAssumeRoleAttempt)
