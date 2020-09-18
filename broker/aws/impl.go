@@ -423,7 +423,7 @@ func (b *Broker) getUserAllowedAccountsFromGroups(userGroups []string) ([]broker
 			return nil, err
 		}
 		wg.Add(1)
-		go func(accountName string, displayName string) {
+		go func(accountName string, displayName string, allowedRoles []string) {
 			defer wg.Done()
 			rolesForAccount, err := b.getAWSRolesForAccount(accountName)
 			if err != nil {
@@ -441,7 +441,7 @@ func (b *Broker) getUserAllowedAccountsFromGroups(userGroups []string) ([]broker
 			mux.Lock()
 			defer mux.Unlock()
 			permittedAccounts = append(permittedAccounts, account)
-		}(accountName, displayName)
+		}(accountName, displayName, allowedRoles)
 	}
 	wg.Wait()
 	b.logger.Debugf(1, "permittedAccounts=%+v", permittedAccounts)
