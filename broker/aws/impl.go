@@ -291,7 +291,7 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accoun
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
 	var roleNames []string
-	c := make(chan error)
+	c := make(chan error, 1)
 	go func() {
 		awsListRolesAttempt.WithLabelValues(accountName).Inc()
 		err := iamClient.ListRolesPages(&listRolesInput,
@@ -310,13 +310,13 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accoun
 		if getRolesErr != nil {
 			return nil, getRolesErr
 		}
-		awsListRolesSuccess.WithLabelValues(accountName).Inc()
-		sort.Strings(roleNames)
-		b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
-		return roleNames, nil
 	case <-time.After(getAWSRolesTimeout):
 		return nil, fmt.Errorf("AWS Get roles had a timeout for account %s", accountName)
 	}
+	awsListRolesSuccess.WithLabelValues(accountName).Inc()
+	sort.Strings(roleNames)
+	b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
+	return roleNames, nil
 }
 
 func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, error) {
