@@ -16,6 +16,8 @@ import (
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
@@ -38,6 +40,44 @@ const (
 	defaultRegion        = "us-west-2"
 	masterAWSProfileName = "broker-master"
 )
+
+var (
+	awsListRolesAttempt = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cloudgate_aws_listroles_attempt_counter",
+			Help: "Attempts to ListRoles from AWS",
+		},
+		[]string{"accountName"},
+	)
+	awsListRolesSuccess = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cloudgate_aws_listroles_success_counter",
+			Help: "Success count of listRoles on AWS",
+		},
+		[]string{"accountName"},
+	)
+	awsAssumeRoleAttempt = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cloudgate_aws_assumerole_attempt_counter",
+			Help: "Success count of assumeRole on AWS",
+		},
+		[]string{"accountName", "roleName"},
+	)
+	awsAssumeRoleSuccess = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cloudgate_aws_assumerole_success_counter",
+			Help: "Success count of assumeRole on AWS",
+		},
+		[]string{"accountName", "roleName"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(awsListRolesAttempt)
+	prometheus.MustRegister(awsListRolesSuccess)
+	prometheus.MustRegister(awsAssumeRoleAttempt)
+	prometheus.MustRegister(awsAssumeRoleSuccess)
+}
 
 func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
 	listRolesRoleName string, logger log.DebugLogger,
@@ -235,17 +275,22 @@ func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 		RoleArn:         &roleArn,
 		RoleSessionName: &roleSessionName,
 	}
+	awsAssumeRoleAttempt.WithLabelValues(accountName, roleName).Inc()
 	assumeRoleOutput, err := stsClient.AssumeRole(&assumeRoleInput)
+	if err == nil {
+		awsAssumeRoleSuccess.WithLabelValues(accountName, roleName).Inc()
+	}
 	return assumeRoleOutput, region, err
 }
 
-func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session) ([]string, error) {
+func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accountName string) ([]string, error) {
 	iamClient := iam.New(validSession)
 	var maxItems int64
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
 
 	var roleNames []string
+	awsListRolesAttempt.WithLabelValues(accountName).Inc()
 	err := iamClient.ListRolesPages(&listRolesInput,
 		func(listRolesOutput *iam.ListRolesOutput, lastPage bool) bool {
 			b.logger.Debugf(2, "listrolesoutput =%v", listRolesOutput)
@@ -258,6 +303,7 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session) ([]str
 	if err != nil {
 		return nil, err
 	}
+	awsListRolesSuccess.WithLabelValues(accountName).Inc()
 	sort.Strings(roleNames)
 	b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
 	return roleNames, nil
@@ -276,8 +322,7 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 	sessionCredentials := credentials.NewStaticCredentials(*assumeRoleOutput.Credentials.AccessKeyId,
 		*assumeRoleOutput.Credentials.SecretAccessKey, *assumeRoleOutput.Credentials.SessionToken)
 	assumedSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
-
-	return b.withSessionGetAWSRoleList(assumedSession)
+	return b.withSessionGetAWSRoleList(assumedSession, accountName)
 }
 
 func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, error) {
@@ -301,7 +346,7 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 
 	// This is strange, no error calling?
 	accountSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
-	return b.withSessionGetAWSRoleList(accountSession)
+	return b.withSessionGetAWSRoleList(accountSession, accountName)
 }
 
 const roleCacheDuration = time.Second * 1800
