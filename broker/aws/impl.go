@@ -387,6 +387,10 @@ func (b *Broker) getAWSRolesForAccount(accountName string) ([]string, error) {
 			b.logger.Debugf(1, "Got roles from cache")
 			return cachedEntry.Roles, nil
 		}
+		if cachedEntry.LastBadTime.After(time.Now().Add(time.Second * -60)) {
+			b.logger.Debugf(1, "Returning recently failed from cache")
+			return cachedEntry.Roles, nil
+		}
 
 		// Entry has expired
 		value, err := b.getAWSRolesForAccountNonCached(accountName)
@@ -396,6 +400,10 @@ func (b *Broker) getAWSRolesForAccount(accountName string) ([]string, error) {
 			// This allow us to continue to operate on transient AWS
 			// errors.
 			b.logger.Printf("Failure gettting non-cached roles, using expired cache")
+			cachedEntry.LastBadTime = time.Now()
+			b.accountRoleMutex.Lock()
+			b.accountRoleCache[accountName] = cachedEntry
+			b.accountRoleMutex.Unlock()
 			return cachedEntry.Roles, nil
 		}
 		cachedEntry.Roles = value
