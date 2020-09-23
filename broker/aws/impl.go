@@ -2,6 +2,7 @@ package aws
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +12,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -79,6 +82,8 @@ func init() {
 	prometheus.MustRegister(awsAssumeRoleSuccess)
 }
 
+const maxRoleRequestsInFlight = 10
+
 func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
 	listRolesRoleName string, logger log.DebugLogger,
 	auditLogger log.DebugLogger) *Broker {
@@ -91,6 +96,7 @@ func newBroker(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
 		logger:              logger,
 		auditLogger:         auditLogger,
 		listRolesRoleName:   listRolesRoleName,
+		listRolesSemaphore:  semaphore.NewWeighted(int64(maxRoleRequestsInFlight)),
 		userAllowedCredentialsCache: make(
 			map[string]userAllowedCredentialsCacheEntry),
 		accountRoleCache:   make(map[string]accountRoleCacheEntry),
@@ -291,6 +297,14 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accoun
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
 	var roleNames []string
+
+	ctx := context.TODO()
+	if err := b.listRolesSemaphore.Acquire(ctx, 1); err != nil {
+		b.logger.Printf("Failed to acquire semaphore: %v", err)
+		return nil, err
+	}
+	defer b.listRolesSemaphore.Release(1)
+
 	c := make(chan error, 1)
 	go func() {
 		awsListRolesAttempt.WithLabelValues(accountName).Inc()
@@ -465,30 +479,39 @@ func (b *Broker) getUserAllowedAccountsFromGroups(userGroups []string) ([]broker
 	}
 	b.logger.Debugf(1, "allowedRoles(post)=%v", allowedRoles)
 	var permittedAccounts []broker.PermittedAccount
+	var mux sync.Mutex
+	var wg sync.WaitGroup
 	for groupName, allowedRoles := range allowedRoles {
 		accountName, ok := groupToAccountName[groupName]
 		if !ok {
 			return nil, errors.New("Cannot map to accountname for some username")
 		}
-		rolesForAccount, err := b.getAWSRolesForAccount(accountName)
-		if err != nil {
-			b.logger.Printf("Error getting profile for account %s: %s", accountName, err)
-			continue
-		}
-		allowedAndAvailable := stringIntersectionNoDups(rolesForAccount, allowedRoles)
-		if len(allowedAndAvailable) < 1 {
-			continue
-		}
-		sort.Strings(allowedAndAvailable)
 		displayName, err := b.accountHumanNameFromName(accountName)
 		if err != nil {
 			return nil, err
 		}
-		var account = broker.PermittedAccount{Name: accountName,
-			HumanName:         displayName,
-			PermittedRoleName: allowedAndAvailable}
-		permittedAccounts = append(permittedAccounts, account)
+		wg.Add(1)
+		go func(accountName string, displayName string, allowedRoles []string) {
+			defer wg.Done()
+			rolesForAccount, err := b.getAWSRolesForAccount(accountName)
+			if err != nil {
+				b.logger.Printf("Error getting profile for account %s: %s", accountName, err)
+				return
+			}
+			allowedAndAvailable := stringIntersectionNoDups(rolesForAccount, allowedRoles)
+			if len(allowedAndAvailable) < 1 {
+				return
+			}
+			sort.Strings(allowedAndAvailable)
+			var account = broker.PermittedAccount{Name: accountName,
+				HumanName:         displayName,
+				PermittedRoleName: allowedAndAvailable}
+			mux.Lock()
+			defer mux.Unlock()
+			permittedAccounts = append(permittedAccounts, account)
+		}(accountName, displayName, allowedRoles)
 	}
+	wg.Wait()
 	b.logger.Debugf(1, "permittedAccounts=%+v", permittedAccounts)
 	return permittedAccounts, nil
 }

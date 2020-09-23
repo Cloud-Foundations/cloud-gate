@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
@@ -43,6 +45,7 @@ type Broker struct {
 	profileCredentials          map[string]awsProfileEntry
 	rawCredentialsFile          []byte
 	listRolesRoleName           string
+	listRolesSemaphore          *semaphore.Weighted
 }
 
 func New(userInfo userinfo.UserGroupsGetter, credentialsFilename string,
