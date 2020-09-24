@@ -374,6 +374,7 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 }
 
 const roleCacheDuration = time.Second * 1800
+const negativeCacheSeconds = 60
 
 func (b *Broker) getAWSRolesForAccount(accountName string) ([]string, error) {
 	b.logger.Debugf(1, "top of getAWSRolesForAccount for account =%s",
@@ -387,7 +388,7 @@ func (b *Broker) getAWSRolesForAccount(accountName string) ([]string, error) {
 			b.logger.Debugf(1, "Got roles from cache")
 			return cachedEntry.Roles, nil
 		}
-		if cachedEntry.LastBadTime.After(time.Now().Add(time.Second * -60)) {
+		if cachedEntry.LastBadTime.After(time.Now().Add(time.Second * (-1 * negativeCacheSeconds))) {
 			b.logger.Debugf(1, "Returning recently failed from cache")
 			return cachedEntry.Roles, nil
 		}
