@@ -388,7 +388,7 @@ func (b *Broker) getAWSRolesForAccount(accountName string) ([]string, error) {
 			b.logger.Debugf(1, "Got roles from cache")
 			return cachedEntry.Roles, nil
 		}
-		if cachedEntry.LastBadTime.After(time.Now().Add(time.Second * -negativeCacheSeconds)) {
+		if cachedEntry.LastBadTime.After(time.Now().Add(time.Second * -(negativeCacheSeconds))) {
 			b.logger.Debugf(1, "getAWSRolesForAccount. Returning recently stale data from cache")
 			return cachedEntry.Roles, nil
 		}
