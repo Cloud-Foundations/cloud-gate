@@ -18,8 +18,9 @@ type userAllowedCredentialsCacheEntry struct {
 }
 
 type accountRoleCacheEntry struct {
-	Roles      []string
-	Expiration time.Time
+	Roles       []string
+	Expiration  time.Time
+	LastBadTime time.Time
 }
 
 type awsProfileEntry struct {

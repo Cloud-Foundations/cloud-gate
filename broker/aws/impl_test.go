@@ -101,3 +101,30 @@ func TestUnsealingSucess(t *testing.T) {
 		t.Fatal("too slow")
 	}
 }
+
+func TestGetAWSRolesForAccountFromCache(t *testing.T) {
+	b := setupCachedBroker()
+
+	// Test non expired entry
+	NonExpiredEntry := accountRoleCacheEntry{
+		Roles:      []string{"role1"},
+		Expiration: time.Now().Add(60 * time.Second),
+	}
+	b.accountRoleCache["NonExpired"] = NonExpiredEntry
+	_, err := b.getAWSRolesForAccount("NonExpired")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test expired, but recently checked as bad
+	ExpiredButRecentlyFailed := accountRoleCacheEntry{
+		Roles:       []string{"role1"},
+		Expiration:  time.Now().Add(-120 * time.Second),
+		LastBadTime: time.Now().Add(-2 * time.Second),
+	}
+	b.accountRoleCache["recentlyFailed"] = ExpiredButRecentlyFailed
+	_, err = b.getAWSRolesForAccount("recentlyFailed")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
