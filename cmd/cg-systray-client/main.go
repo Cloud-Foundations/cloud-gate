@@ -22,6 +22,9 @@ import (
 
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v2"
+
+	"github.com/getlantern/systray"
+	//"github.com/getlantern/systray/example/icon"
 )
 
 const defaultVersionNumber = "No version provided"
@@ -54,6 +57,10 @@ var (
 	logLevel             = flag.Uint("logLevel", 1, "Verbosity of logging")
 )
 
+var (
+	appMessageChan = make(chan string, 100)
+)
+
 type AppConfigFile struct {
 	BaseURL              string `yaml:"base_url"`
 	OutputProfilePrefix  string `yaml:"output_profile_prefix"`
@@ -84,7 +91,8 @@ type AWSCredentialsJSON struct {
 
 func loggerPrintf(level uint, format string, v ...interface{}) {
 	if level <= *logLevel {
-		log.Printf(format, v...)
+		//log.Printf(format, v...)
+		appMessageChan <- fmt.Sprintf(format, v...)
 	}
 }
 
@@ -385,7 +393,12 @@ func usage() {
 }
 
 func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
-	for cert.Leaf.NotAfter.After(time.Now()) {
+	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		loggerPrintf(0, "Error Parsing Certificate: %s", err)
+		return err
+	}
+	for parsedCert.NotAfter.After(time.Now()) {
 		credentialCount, err := getCerts(cert, config.BaseURL, *crededentialFilename,
 			*askAdminRoles, config.OutputProfilePrefix, *lowerCaseProfileName,
 			includeRoleRE, excludeRoleRE)
@@ -405,26 +418,108 @@ func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includ
 func backgroundLoop(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
 	for true {
 		//step 1: load credentials
+		loggerPrintf(0, "Top of  backgroundLoop")
 		cert, err := tls.LoadX509KeyPair(certFilename, keyFilename)
 		if err != nil {
 			loggerPrintf(0, "Error Loading X509KeyPair: %s", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		if cert.Leaf.NotAfter.After(time.Now()) {
-			loggerPrintf(0, "keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", cert.Leaf.NotAfter)
+		loggerPrintf(0, "Certificalte loaded")
+		parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			loggerPrintf(0, "Error Parsing Certificate: %s", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
+		loggerPrintf(0, "Certificalte parsed")
+		if parsedCert.NotAfter.Before(time.Now()) {
+			loggerPrintf(0, "Certificalte is expired")
+			//loggerPrintf(0, "keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", parsedCert.NotAfter)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		loggerPrintf(0, "Certificalte is not expired exp=%s", parsedCert.NotAfter)
+
+		time.Sleep(2 * time.Second)
 		err = withCertFetchCredentials(config, cert, includeRoleRE, excludeRoleRE)
 		if err != nil {
 			loggerPrintf(0, "Error Fetching Credentials: %s", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
+		time.Sleep(5 * time.Second)
+		loggerPrintf(0, "End of  backgroundLoop")
 
 	}
 	return nil
+}
+
+func onReady() {
+	//systray.SetTemplateIcon(icon.Data, icon.Data)
+	systray.SetTitle("Awesome App")
+	systray.SetTooltip("Lantern")
+	mAppMessage := systray.AddMenuItem("status", "CurrentMessage")
+	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
+	go func() {
+		<-mQuitOrig.ClickedCh
+		fmt.Println("Requesting quit")
+		systray.Quit()
+		fmt.Println("Finished quitting")
+	}()
+	go func() {
+		for {
+			//var message string
+			message := <-appMessageChan
+			mAppMessage.SetTitle(message)
+		}
+	}()
+}
+
+func getIcon(s string) []byte {
+	b, err := ioutil.ReadFile(s)
+	if err != nil {
+		fmt.Print(err)
+	}
+	return b
+}
+
+func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
+	certNotAfter, err := getCertExpirationTime(certFilename)
+	if err != nil {
+		log.Fatalf("Error on getCertExpirationTime: %s", err)
+	}
+	if certNotAfter.Before(time.Now()) {
+		log.Fatalf("keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", certNotAfter)
+	}
+
+	for certNotAfter.After(time.Now()) {
+		cert, err := tls.LoadX509KeyPair(certFilename, keyFilename)
+		if err != nil {
+			log.Fatalf("Error Loading X509KeyPair: %s", err)
+		}
+		credentialCount, err := getCerts(cert, config.BaseURL, *crededentialFilename,
+			*askAdminRoles, config.OutputProfilePrefix, *lowerCaseProfileName,
+			includeRoleRE, excludeRoleRE)
+		if err != nil {
+			log.Printf("err=%s", err)
+			log.Printf("Failure getting certs, retrying in (%s)", failureSleepDuration)
+			time.Sleep(failureSleepDuration)
+		} else {
+			log.Printf("%d credentials successfully generated. Sleeping for (%s)", credentialCount, sleepDuration)
+			time.Sleep(sleepDuration)
+		}
+		certNotAfter, err = getCertExpirationTime(certFilename)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
+
+	log.Printf("done")
+
+	return nil
+
 }
 
 func main() {
@@ -481,36 +576,31 @@ func main() {
 	loggerPrintf(1, "Configuration Loaded")
 	loggerPrintf(2, "config=%+v", config)
 	loggerPrintf(2, "Using Cert=%s, key=%s", *certFilename, *keyFilename)
-	certNotAfter, err := getCertExpirationTime(*certFilename)
-	if err != nil {
-		log.Fatalf("Error on getCertExpirationTime: %s", err)
-	}
-	if certNotAfter.Before(time.Now()) {
-		log.Fatalf("keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", certNotAfter)
-	}
 
-	for certNotAfter.After(time.Now()) {
-		cert, err := tls.LoadX509KeyPair(*certFilename, *keyFilename)
+	useNew := true
+	if !useNew {
+		err = oneShotCLIPath(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
 		if err != nil {
-			log.Fatalf("Error Loading X509KeyPair: %s", err)
+			log.Fatalf("Fatal one shoe exec: %s", err)
 		}
-		credentialCount, err := getCerts(cert, config.BaseURL, *crededentialFilename,
-			*askAdminRoles, config.OutputProfilePrefix, *lowerCaseProfileName,
-			includeRoleRE, excludeRoleRE)
+		log.Printf("done")
+		return
+	}
+	//start background thread
+	go func() {
+		err = backgroundLoop(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
 		if err != nil {
-			log.Printf("err=%s", err)
-			log.Printf("Failure getting certs, retrying in (%s)", failureSleepDuration)
-			time.Sleep(failureSleepDuration)
-		} else {
-			log.Printf("%d credentials successfully generated. Sleeping for (%s)", credentialCount, sleepDuration)
-			time.Sleep(sleepDuration)
+			log.Fatalf("Fatal one shoe exec: %s", err)
 		}
-		certNotAfter, err = getCertExpirationTime(*certFilename)
-		if err != nil {
-			log.Fatal(err)
-		}
+	}()
 
+	onExit := func() {
+		now := time.Now()
+		ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano()), []byte(now.String()), 0644)
 	}
 
-	log.Printf("done")
+	systray.Run(onReady, onExit)
+
+	log.Printf("done?")
+
 }
