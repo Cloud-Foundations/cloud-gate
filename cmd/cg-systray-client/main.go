@@ -57,8 +57,15 @@ var (
 	logLevel             = flag.Uint("logLevel", 1, "Verbosity of logging")
 )
 
+const (
+	StatusFail = iota
+	StatusWarn
+	StatusGood
+)
+
 var (
 	appMessageChan = make(chan string, 100)
+	statusIconChan = make(chan int, 100)
 )
 
 type AppConfigFile struct {
@@ -407,7 +414,8 @@ func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includ
 			log.Printf("Failure getting certs, retrying in (%s)", failureSleepDuration)
 			time.Sleep(failureSleepDuration)
 		} else {
-			log.Printf("%d credentials successfully generated. Sleeping for (%s)", credentialCount, sleepDuration)
+			loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
+			statusIconChan <- StatusGood
 			time.Sleep(sleepDuration)
 		}
 	}
@@ -472,6 +480,21 @@ func onReady() {
 			//var message string
 			message := <-appMessageChan
 			mAppMessage.SetTitle(message)
+		}
+	}()
+	//icon func
+	go func() {
+		systray.SetIcon(getIcon("favicon.ico"))
+		mAppMessage.SetIcon(getIcon("exclamation-32x32.png"))
+		for {
+			appStatus := <-statusIconChan
+			switch appStatus {
+			case StatusGood:
+				mAppMessage.SetIcon(getIcon("checkmark-32x32.png"))
+			default:
+				//systray.SetIcon(getIcon("favicon.ico"))
+				mAppMessage.SetIcon(getIcon("crossmark-32x32.png"))
+			}
 		}
 	}()
 }
