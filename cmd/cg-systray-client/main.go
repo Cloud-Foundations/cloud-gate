@@ -49,11 +49,12 @@ var (
 	askAdminRoles        = flag.Bool("askAdminRoles", false, "ask also for admin roles")
 	outputProfilePrefix  = flag.String("outputProfilePrefix", defaultOutputProfilePrefix, "prefix to put to profile names $PREFIX$accountName-$roleName")
 	lowerCaseProfileName = flag.Bool("lowerCaseProfileName", false, "set profile names to lowercase")
-	configFilename       = flag.String("configFile", filepath.Join(getUserHomeDir(), ".config", "cloud-gate", "config.yml"), "An Ini file with credentials")
+	configFilename       = flag.String("configFile", filepath.Join(getUserHomeDir(), ".config", "cloud-gate", "config.yml"), "A YAML file with cloud-gate config")
 	oldBotoCompat        = flag.Bool("oldBotoCompat", false, "add aws_security_token for OLD boto installations (not recommended)")
 	includeRoleREFilter  = flag.String("includeRoleREFilter", "", "Positive RE filter that role/account MUST match")
 	excludeRoleREFilter  = flag.String("excludeRoleREFilter", "", "Negative RE filter. Acount/Role values matching will not be generated")
 	logLevel             = flag.Uint("logLevel", 1, "Verbosity of logging")
+	logFilename          = flag.String("logFilename", "cloudgate-systray.log", "The filename where los will be appended")
 )
 
 const (
@@ -65,6 +66,7 @@ const (
 var (
 	appMessageChan = make(chan string, 100)
 	statusIconChan = make(chan int, 100)
+	fileLogger     *log.Logger
 )
 
 type AppConfigFile struct {
@@ -98,6 +100,7 @@ type AWSCredentialsJSON struct {
 func loggerPrintf(level uint, format string, v ...interface{}) {
 	if level <= *logLevel {
 		//log.Printf(format, v...)
+		fileLogger.Printf(format, v...)
 		appMessageChan <- fmt.Sprintf(format, v...)
 	}
 }
@@ -543,10 +546,20 @@ func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename strin
 
 }
 
+//func initalizeLogger()
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
 	computeUserAgent()
+
+	logFile, err := os.OpenFile(*logFilename,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Failed to openfile =%s", err)
+	}
+	defer logFile.Close()
+	fileLogger = log.New(logFile, "", log.LstdFlags)
 
 	config, err := loadVerifyConfigFile(*configFilename)
 	if err != nil {
