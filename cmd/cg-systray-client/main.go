@@ -24,7 +24,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/getlantern/systray"
-	//"github.com/getlantern/systray/example/icon"
 )
 
 const defaultVersionNumber = "No version provided"
@@ -412,6 +411,7 @@ func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includ
 		if err != nil {
 			log.Printf("err=%s", err)
 			log.Printf("Failure getting certs, retrying in (%s)", failureSleepDuration)
+			statusIconChan <- StatusWarn
 			time.Sleep(failureSleepDuration)
 		} else {
 			loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
@@ -464,9 +464,8 @@ func backgroundLoop(config AppConfigFile, certFilename string, keyFilename strin
 }
 
 func onReady() {
-	//systray.SetTemplateIcon(icon.Data, icon.Data)
-	systray.SetTitle("Awesome App")
-	systray.SetTooltip("Lantern")
+	//systray.SetTitle("Awesome App")
+	systray.SetTooltip("CloudGate systray")
 	mAppMessage := systray.AddMenuItem("status", "CurrentMessage")
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
 	go func() {
@@ -492,7 +491,6 @@ func onReady() {
 			case StatusGood:
 				mAppMessage.SetIcon(getIcon("checkmark-32x32.png"))
 			default:
-				//systray.SetIcon(getIcon("favicon.ico"))
 				mAppMessage.SetIcon(getIcon("crossmark-32x32.png"))
 			}
 		}
@@ -500,11 +498,11 @@ func onReady() {
 }
 
 func getIcon(s string) []byte {
-	b, err := ioutil.ReadFile(s)
+	data, err := Asset("data/" + s)
 	if err != nil {
 		fmt.Print(err)
 	}
-	return b
+	return data
 }
 
 func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
