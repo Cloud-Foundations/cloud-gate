@@ -3,7 +3,7 @@ package configuration
 import (
 	"time"
 
-	"github.com/Cloud-Foundations/Dominator/lib/log"
+	"github.com/Cloud-Foundations/golib/pkg/log"
 )
 
 type AWSAccount struct {
