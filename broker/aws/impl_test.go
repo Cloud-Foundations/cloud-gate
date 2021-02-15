@@ -1,13 +1,11 @@
 package aws
 
 import (
-	stdlog "log"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/Cloud-Foundations/Dominator/lib/log/debuglogger"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
+	"github.com/Cloud-Foundations/golib/pkg/log/testlogger"
 )
 
 const credentialsFilename = "/credentials-filename"
@@ -34,19 +32,15 @@ Gx3fQbU0jBkntZw2bHeUZnryMu6TC9hmyLl0q/Rz
 =Dp5J
 -----END PGP MESSAGE-----`
 
-func setupCachedBroker() *Broker {
-	slogger := stdlog.New(os.Stderr, "", stdlog.LstdFlags)
-	logger := debuglogger.New(slogger)
-	b := &Broker{ //userInfo: userInfo,
-		credentialsFilename: credentialsFilename,
-		logger:              logger,
-		//syslog:                      syslog,
+func setupCachedBroker(t *testing.T) *Broker {
+	b := &Broker{
+		credentialsFilename:         credentialsFilename,
+		logger:                      testlogger.New(t),
 		userAllowedCredentialsCache: make(map[string]userAllowedCredentialsCacheEntry),
 		accountRoleCache:            make(map[string]accountRoleCacheEntry),
 		isUnsealedChannel:           make(chan error, 1),
 		profileCredentials:          make(map[string]awsProfileEntry),
 	}
-
 	demoAccountEntry := broker.PermittedAccount{Name: "demoAccount",
 		HumanName: "Demo Account", PermittedRoleName: []string{"ro-ccount"}}
 	demoUserCachedEntry := userAllowedCredentialsCacheEntry{
@@ -54,12 +48,11 @@ func setupCachedBroker() *Broker {
 		Expiration:        time.Now().Add(time.Second * 30),
 	}
 	b.userAllowedCredentialsCache["demouser"] = demoUserCachedEntry
-
 	return b
 }
 
 func TestLoadCredentialsFrombytesSuccess(t *testing.T) {
-	b := setupCachedBroker()
+	b := setupCachedBroker(t)
 	c1, err := b.GetIsUnsealedChannel()
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +61,6 @@ func TestLoadCredentialsFrombytesSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	select {
 	case unsealErr := <-c1:
 		if unsealErr != nil {
@@ -80,13 +72,11 @@ func TestLoadCredentialsFrombytesSuccess(t *testing.T) {
 }
 
 func TestUnsealingSucess(t *testing.T) {
-	b := setupCachedBroker()
-
+	b := setupCachedBroker(t)
 	c1, err := b.GetIsUnsealedChannel()
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	b.rawCredentialsFile = []byte(encryptedValidCredentials)
 	_, err = b.ProcessNewUnsealingSecret("password")
 	if err != nil {
@@ -103,8 +93,7 @@ func TestUnsealingSucess(t *testing.T) {
 }
 
 func TestGetAWSRolesForAccountFromCache(t *testing.T) {
-	b := setupCachedBroker()
-
+	b := setupCachedBroker(t)
 	// Test non expired entry
 	NonExpiredEntry := accountRoleCacheEntry{
 		Roles:      []string{"role1"},
@@ -126,5 +115,4 @@ func TestGetAWSRolesForAccountFromCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }
