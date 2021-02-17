@@ -18,7 +18,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/Dominator/lib/log/serverlogger"
 	"github.com/Cloud-Foundations/Dominator/lib/logbuf"
 	"github.com/Cloud-Foundations/cloud-gate/broker"
@@ -27,6 +26,7 @@ import (
 	"github.com/Cloud-Foundations/cloud-gate/lib/constants"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
 	acmecfg "github.com/Cloud-Foundations/golib/pkg/crypto/certmanager/config"
+	"github.com/Cloud-Foundations/golib/pkg/log"
 	"github.com/Cloud-Foundations/keymaster/lib/instrumentedwriter"
 )
 

@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/Cloud-Foundations/Dominator/lib/log"
 	"github.com/Cloud-Foundations/Dominator/lib/log/debuglogger"
 	"github.com/Cloud-Foundations/Dominator/lib/log/serverlogger"
 	"github.com/Cloud-Foundations/Dominator/lib/log/teelogger"
@@ -24,6 +23,7 @@ import (
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/gitdb"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/ldap"
+	"github.com/Cloud-Foundations/golib/pkg/log"
 	"github.com/Cloud-Foundations/tricorder/go/tricorder"
 )
 
