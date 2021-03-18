@@ -45,26 +45,23 @@ var (
 	keyFilename  = flag.String("key", filepath.Join(getUserHomeDir(), ".ssl", "keymaster.key"), "A PEM encoded private key file.")
 	baseURL      = flag.String("baseURL", DefaultBaseURL,
 		"location of the cloud-broker")
+	noSystray            = flag.Bool("noSystray", false, "No systray, just background loop")
 	crededentialFilename = flag.String("credentialFile", filepath.Join(getUserHomeDir(), ".aws", "credentials"), "An Ini file with credentials")
 	askAdminRoles        = flag.Bool("askAdminRoles", false, "ask also for admin roles")
 	outputProfilePrefix  = flag.String("outputProfilePrefix", defaultOutputProfilePrefix, "prefix to put to profile names $PREFIX$accountName-$roleName")
 	lowerCaseProfileName = flag.Bool("lowerCaseProfileName", false, "set profile names to lowercase")
-	configFilename       = flag.String("configFile", filepath.Join(getUserHomeDir(), ".config", "cloud-gate", "config.yml"), "An Ini file with credentials")
+	configFilename       = flag.String("configFile", filepath.Join(getUserHomeDir(), ".config", "cloud-gate", "config.yml"), "A YAML file with cloud-gate config")
 	oldBotoCompat        = flag.Bool("oldBotoCompat", false, "add aws_security_token for OLD boto installations (not recommended)")
 	includeRoleREFilter  = flag.String("includeRoleREFilter", "", "Positive RE filter that role/account MUST match")
 	excludeRoleREFilter  = flag.String("excludeRoleREFilter", "", "Negative RE filter. Acount/Role values matching will not be generated")
 	logLevel             = flag.Uint("logLevel", 1, "Verbosity of logging")
+	logFilename          = flag.String("logFilename", "cloudgate-systray.log", "The filename where los will be appended")
 )
 
 const (
 	StatusFail = iota
 	StatusWarn
 	StatusGood
-)
-
-var (
-	appMessageChan = make(chan string, 100)
-	statusIconChan = make(chan int, 100)
 )
 
 type AppConfigFile struct {
@@ -95,11 +92,47 @@ type AWSCredentialsJSON struct {
 	Expiration   time.Time `json:"cloudgate_comment_expiration,omitempty"`
 }
 
-func loggerPrintf(level uint, format string, v ...interface{}) {
-	if level <= *logLevel {
-		//log.Printf(format, v...)
-		appMessageChan <- fmt.Sprintf(format, v...)
+type cgClient struct {
+	config               AppConfigFile
+	logLevel             uint
+	logger               *log.Logger
+	excludeRoleRE        *regexp.Regexp
+	includeRoleRE        *regexp.Regexp
+	lowerCaseProfileName bool
+	oldBotoCompat        bool
+	appMessageChan       chan string
+	statusIconChan       chan int
+}
+
+func (c *cgClient) LoggerPrintf(level uint, format string, v ...interface{}) {
+	if level <= c.logLevel {
+		c.logger.Printf(format, v...)
 	}
+}
+
+func (c *cgClient) loggerPrintf(level uint, format string, v ...interface{}) {
+	if level <= c.logLevel {
+		c.logger.Printf(format, v...)
+		c.appMessageChan <- fmt.Sprintf(format, v...)
+	}
+}
+
+// since we start channel consumption after startup we need to have some buffer...
+// This is not great story
+const defaultChanSize = 6
+
+func NewClient(config AppConfigFile, excludeRoleRE *regexp.Regexp, includeRoleRE *regexp.Regexp, lowerCaseProfileName bool, logLevel uint, logger *log.Logger) *cgClient {
+	client := cgClient{
+		config:               config,
+		excludeRoleRE:        excludeRoleRE,
+		includeRoleRE:        includeRoleRE,
+		lowerCaseProfileName: lowerCaseProfileName,
+		logLevel:             logLevel,
+		logger:               logger,
+		appMessageChan:       make(chan string, defaultChanSize),
+		statusIconChan:       make(chan int, defaultChanSize),
+	}
+	return &client
 }
 
 func loadVerifyConfigFile(filename string) (AppConfigFile, error) {
@@ -148,13 +181,12 @@ const badReturnErrText = "bad return code"
 const sleepDuration = 1800 * time.Second
 const failureSleepDuration = 60 * time.Second
 
-func getAndUpdateCreds(client *http.Client, baseUrl, accountName, roleName string,
-	cfg *ini.File, outputProfilePrefix string,
-	lowerCaseProfileName bool) error {
-	loggerPrintf(1, "Getting creds for account=%s, role=%s", accountName, roleName)
+func (c *cgClient) getAndUpdateCreds(client *http.Client, accountName, roleName string,
+	cfg *ini.File, outputProfilePrefix string) error {
+	c.loggerPrintf(1, "Getting creds for account=%s, role=%s", accountName, roleName)
 
 	values := url.Values{"accountName": {accountName}, "roleName": {roleName}}
-	req, err := http.NewRequest("POST", baseUrl+"/generatetoken", strings.NewReader(values.Encode()))
+	req, err := http.NewRequest("POST", c.config.BaseURL+"/generatetoken", strings.NewReader(values.Encode()))
 	if err != nil {
 		return err
 	}
@@ -174,22 +206,20 @@ func getAndUpdateCreds(client *http.Client, baseUrl, accountName, roleName strin
 	if resp.StatusCode >= 300 {
 		return errors.New(badReturnErrText)
 	}
-	//log.Println(string(data))
 
 	var awsCreds AWSCredentialsJSON
 	err = json.Unmarshal(data, &awsCreds)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	//log.Printf("%+v", awsCreds)
 	fileProfile := outputProfilePrefix + accountName + "-" + roleName
-	if lowerCaseProfileName {
+	if c.lowerCaseProfileName {
 		fileProfile = strings.ToLower(fileProfile)
 	}
 	cfg.Section(fileProfile).Key("aws_access_key_id").SetValue(awsCreds.SessionId)
 	cfg.Section(fileProfile).Key("aws_secret_access_key").SetValue(awsCreds.SessionKey)
 	cfg.Section(fileProfile).Key("aws_session_token").SetValue(awsCreds.SessionToken)
-	if *oldBotoCompat {
+	if c.oldBotoCompat {
 		cfg.Section(fileProfile).Key("aws_security_token").SetValue(awsCreds.SessionToken)
 	} else {
 		cfg.Section(fileProfile).DeleteKey("aws_security_token")
@@ -251,19 +281,19 @@ func setupHttpClient(cert tls.Certificate) (*http.Client, error) {
 	return client, nil
 }
 
-func getAccountsList(client *http.Client, baseUrl string) (*getAccountInfo, error) {
-	loggerPrintf(4, "Top of getAcountsList")
+func (c *cgClient) getAccountsList(client *http.Client) (*getAccountInfo, error) {
+	c.loggerPrintf(4, "Top of getAcountsList")
 	// Do GET something
-	req, err := http.NewRequest("GET", baseUrl, nil)
+	req, err := http.NewRequest("GET", c.config.BaseURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgentString)
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("failed to connect err=%s transport=%+v ", err, client.Transport)
+		c.logger.Printf("failed to connect err=%s transport=%+v ", err, client.Transport)
 		if resp != nil {
-			log.Printf("resp=+%v", resp)
+			c.logger.Printf("resp=+%v", resp)
 		}
 		return nil, err
 	}
@@ -271,7 +301,7 @@ func getAccountsList(client *http.Client, baseUrl string) (*getAccountInfo, erro
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusUnauthorized {
-			log.Printf("getAccountsList, Failed Unauthorized, Please check your certificate configuration.")
+			c.logger.Printf("getAccountsList, Failed Unauthorized, Please check your certificate configuration.")
 		}
 		return nil, fmt.Errorf("getAccountsList: Failed to Get accounts Status=%d", resp.StatusCode)
 	}
@@ -279,25 +309,25 @@ func getAccountsList(client *http.Client, baseUrl string) (*getAccountInfo, erro
 	// Dump response
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	var accountList getAccountInfo
 	err = json.Unmarshal(data, &accountList)
 	if err != nil {
-		log.Printf("Error decoding account Data, data=%s", data)
-		log.Fatal(err)
+		c.logger.Printf("Error decoding account Data, data=%s", data)
+		return nil, err
 	}
-	loggerPrintf(2, "accountList=%v", accountList)
+	c.loggerPrintf(2, "accountList=%v", accountList)
 	return &accountList, nil
 
 }
 
-func getCerts(cert tls.Certificate, baseUrl string,
+func (c *cgClient) getCerts(cert tls.Certificate, baseUrl string,
 	credentialFilename string, askAdminRoles bool,
-	outputProfilePrefix string, lowerCaseProfileName bool,
+	outputProfilePrefix string,
 	includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) (int, error) {
 
-	loggerPrintf(4, "Top of getCerts")
+	c.loggerPrintf(4, "Top of getCerts")
 	credFile, err := setupCredentialFile(credentialFilename)
 	if err != nil {
 		return 0, fmt.Errorf("getCerts error from CredentialFile: %s", err)
@@ -307,7 +337,7 @@ func getCerts(cert tls.Certificate, baseUrl string,
 	if err != nil {
 		return 0, err
 	}
-	accountList, err := getAccountsList(client, baseUrl)
+	accountList, err := c.getAccountsList(client)
 	if err != nil {
 		return 0, err
 	}
@@ -333,22 +363,23 @@ func getCerts(cert tls.Certificate, baseUrl string,
 					continue
 				}
 			}
-			err = getAndUpdateCreds(client, baseUrl,
+			err = c.getAndUpdateCreds(client,
 				account.Name, roleName, credFile,
-				outputProfilePrefix, lowerCaseProfileName)
+				outputProfilePrefix)
 			if err != nil {
 				if err.Error() == badReturnErrText {
-					log.Printf("skipping role")
+					c.logger.Printf("skipping role")
 					continue
 				}
-				log.Fatalf("error on getAnd UpdateCreds=%s", err)
+				c.logger.Printf("error on getAnd UpdateCreds=%s", err)
+				return credentialsGenerated, err
 			}
 			credentialsGenerated += 1
 		}
 	}
 	err = credFile.SaveTo(credentialFilename)
 	if err != nil {
-		log.Fatal(err)
+		return credentialsGenerated, err
 	}
 
 	return credentialsGenerated, nil
@@ -398,24 +429,24 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
+func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
 	parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		loggerPrintf(0, "Error Parsing Certificate: %s", err)
+		c.loggerPrintf(0, "Error Parsing Certificate: %s", err)
 		return err
 	}
 	for parsedCert.NotAfter.After(time.Now()) {
-		credentialCount, err := getCerts(cert, config.BaseURL, *crededentialFilename,
-			*askAdminRoles, config.OutputProfilePrefix, *lowerCaseProfileName,
+		credentialCount, err := c.getCerts(cert, config.BaseURL, *crededentialFilename,
+			*askAdminRoles, config.OutputProfilePrefix,
 			includeRoleRE, excludeRoleRE)
 		if err != nil {
-			log.Printf("err=%s", err)
-			log.Printf("Failure getting certs, retrying in (%s)", failureSleepDuration)
-			statusIconChan <- StatusWarn
+			c.logger.Printf("err=%s", err)
+			c.loggerPrintf(0, "Failure getting certs, retrying in (%s)", failureSleepDuration)
+			c.statusIconChan <- StatusWarn
 			time.Sleep(failureSleepDuration)
 		} else {
-			loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
-			statusIconChan <- StatusGood
+			c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
+			c.statusIconChan <- StatusGood
 			time.Sleep(sleepDuration)
 		}
 	}
@@ -423,48 +454,47 @@ func withCertFetchCredentials(config AppConfigFile, cert tls.Certificate, includ
 }
 
 // This function never ends except for a panic
-func backgroundLoop(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
+func (c *cgClient) BackgroundLoop(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
 	for true {
 		//step 1: load credentials
-		loggerPrintf(0, "Top of  backgroundLoop")
+		c.loggerPrintf(2, "Top of  backgroundLoop")
 		cert, err := tls.LoadX509KeyPair(certFilename, keyFilename)
 		if err != nil {
-			loggerPrintf(0, "Error Loading X509KeyPair: %s", err)
+			c.loggerPrintf(0, "Error Loading X509KeyPair: %s", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		loggerPrintf(0, "Certificalte loaded")
+		c.loggerPrintf(2, "Certificalte loaded")
 		parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
 		if err != nil {
-			loggerPrintf(0, "Error Parsing Certificate: %s", err)
+			c.loggerPrintf(0, "Error Parsing Certificate: %s", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		loggerPrintf(0, "Certificalte parsed")
+		c.loggerPrintf(2, "Certificalte parsed")
 		if parsedCert.NotAfter.Before(time.Now()) {
-			loggerPrintf(0, "Certificalte is expired")
+			c.loggerPrintf(0, "Certificalte is expired")
 			//loggerPrintf(0, "keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", parsedCert.NotAfter)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		loggerPrintf(0, "Certificalte is not expired exp=%s", parsedCert.NotAfter)
+		c.loggerPrintf(0, "Certificalte is not expired exp=%s", parsedCert.NotAfter)
 
 		time.Sleep(2 * time.Second)
-		err = withCertFetchCredentials(config, cert, includeRoleRE, excludeRoleRE)
+		err = c.withCertFetchCredentials(config, cert, includeRoleRE, excludeRoleRE)
 		if err != nil {
-			loggerPrintf(0, "Error Fetching Credentials: %s", err)
+			c.loggerPrintf(0, "Error Fetching Credentials: %s", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 		time.Sleep(5 * time.Second)
-		loggerPrintf(0, "End of  backgroundLoop")
+		c.loggerPrintf(0, "End of  backgroundLoop")
 
 	}
 	return nil
 }
 
-func onReady() {
-	//systray.SetTitle("Awesome App")
+func (c *cgClient) OnReady() {
 	systray.SetTooltip("CloudGate systray")
 	mAppMessage := systray.AddMenuItem("status", "CurrentMessage")
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
@@ -477,7 +507,7 @@ func onReady() {
 	go func() {
 		for {
 			//var message string
-			message := <-appMessageChan
+			message := <-c.appMessageChan
 			mAppMessage.SetTitle(message)
 		}
 	}()
@@ -486,7 +516,7 @@ func onReady() {
 		systray.SetIcon(getIcon("favicon.ico"))
 		mAppMessage.SetIcon(getIcon("exclamation-32x32.png"))
 		for {
-			appStatus := <-statusIconChan
+			appStatus := <-c.statusIconChan
 			switch appStatus {
 			case StatusGood:
 				mAppMessage.SetIcon(getIcon("checkmark-32x32.png"))
@@ -497,6 +527,24 @@ func onReady() {
 	}()
 }
 
+func (c *cgClient) OnExit() {
+	now := time.Now()
+	ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano()), []byte(now.String()), 0644)
+}
+
+func (c *cgClient) ConsumeChannels() {
+	go func() {
+		for {
+			<-c.appMessageChan
+
+		}
+	}()
+	for {
+		<-c.statusIconChan
+	}
+
+}
+
 func getIcon(s string) []byte {
 	data, err := Asset("data/" + s)
 	if err != nil {
@@ -505,7 +553,7 @@ func getIcon(s string) []byte {
 	return data
 }
 
-func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
+func (c *cgClient) OneShotCLIPath(config AppConfigFile, certFilename string, keyFilename string, includeRoleRE *regexp.Regexp, excludeRoleRE *regexp.Regexp) error {
 	certNotAfter, err := getCertExpirationTime(certFilename)
 	if err != nil {
 		log.Fatalf("Error on getCertExpirationTime: %s", err)
@@ -519,8 +567,8 @@ func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename strin
 		if err != nil {
 			log.Fatalf("Error Loading X509KeyPair: %s", err)
 		}
-		credentialCount, err := getCerts(cert, config.BaseURL, *crededentialFilename,
-			*askAdminRoles, config.OutputProfilePrefix, *lowerCaseProfileName,
+		credentialCount, err := c.getCerts(cert, config.BaseURL, *crededentialFilename,
+			*askAdminRoles, config.OutputProfilePrefix,
 			includeRoleRE, excludeRoleRE)
 		if err != nil {
 			log.Printf("err=%s", err)
@@ -543,10 +591,20 @@ func oneShotCLIPath(config AppConfigFile, certFilename string, keyFilename strin
 
 }
 
+//func initalizeLogger()
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
 	computeUserAgent()
+
+	logFile, err := os.OpenFile(*logFilename,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Failed to openfile =%s", err)
+	}
+	defer logFile.Close()
+	fileLogger := log.New(logFile, "", log.LstdFlags)
 
 	config, err := loadVerifyConfigFile(*configFilename)
 	if err != nil {
@@ -594,13 +652,15 @@ func main() {
 		config.BaseURL = *baseURL
 	}
 
-	loggerPrintf(1, "Configuration Loaded")
-	loggerPrintf(2, "config=%+v", config)
-	loggerPrintf(2, "Using Cert=%s, key=%s", *certFilename, *keyFilename)
+	client := NewClient(config, excludeRoleRE, includeRoleRE, *lowerCaseProfileName, *logLevel, fileLogger)
+
+	client.LoggerPrintf(1, "Configuration Loaded")
+	client.LoggerPrintf(2, "config=%+v", config)
+	client.LoggerPrintf(2, "Using Cert=%s, key=%s", *certFilename, *keyFilename)
 
 	useNew := true
 	if !useNew {
-		err = oneShotCLIPath(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
+		err = client.OneShotCLIPath(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
 		if err != nil {
 			log.Fatalf("Fatal one shoe exec: %s", err)
 		}
@@ -609,19 +669,17 @@ func main() {
 	}
 	//start background thread
 	go func() {
-		err = backgroundLoop(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
+		err = client.BackgroundLoop(config, *certFilename, *keyFilename, includeRoleRE, excludeRoleRE)
 		if err != nil {
 			log.Fatalf("Fatal one shoe exec: %s", err)
 		}
 	}()
 
-	onExit := func() {
-		now := time.Now()
-		ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano()), []byte(now.String()), 0644)
+	if *noSystray {
+		client.ConsumeChannels()
+	} else {
+		systray.Run(client.OnReady, client.OnExit)
 	}
-
-	systray.Run(onReady, onExit)
-
 	log.Printf("done?")
 
 }
