@@ -450,11 +450,13 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 			continue
 		}
 		c.statusIconChan <- StatusGood
+		requestAdmin = *askAdminRoles
 		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
 		select {
 		case <-time.After(sleepDuration):
 			c.statusIconChan <- StatusGood
-		case <-c.getCredsNowChan:
+		case getAdmin := <-c.getCredsNowChan:
+			requestAdmin = getAdmin
 			c.loggerPrintf(1, "Got request for inmediate request")
 		}
 
