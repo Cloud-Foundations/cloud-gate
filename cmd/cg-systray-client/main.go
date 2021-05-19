@@ -454,7 +454,7 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
 		select {
 		case <-time.After(sleepDuration):
-			c.statusIconChan <- StatusGood
+			c.loggerPrintf(1, "Timer expired")
 		case getAdmin := <-c.getCredsNowChan:
 			requestAdmin = getAdmin
 			c.loggerPrintf(1, "Got request for inmediate request")
@@ -513,19 +513,18 @@ func (c *cgClient) OnReady() {
 	subMenuGetAdminCreds := subMenuTop.AddSubMenuItem("Admin (sudo)", "SubMenu Test (bottom)")
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
 	go func() {
-		<-mQuitOrig.ClickedCh
-		fmt.Println("Requesting quit")
-		systray.Quit()
-		fmt.Println("Finished quitting")
-	}()
-	go func() {
 		for {
 			select {
 			case <-subMenuGetAdminCreds.ClickedCh:
 				c.getCredsNowChan <- true
+				subMenuGetAdminCreds.Disable()
 			case <-subMenuGetRegularCreds.ClickedCh:
 				c.getCredsNowChan <- false
-				//TODO lock down
+				subMenuGetRegularCreds.Disable()
+			case <-mQuitOrig.ClickedCh:
+				fmt.Println("Requesting quit")
+				systray.Quit()
+				fmt.Println("Finished quitting")
 			}
 		}
 	}()
@@ -542,6 +541,8 @@ func (c *cgClient) OnReady() {
 		mAppMessage.SetIcon(getIcon("exclamation-32x32.png"))
 		for {
 			appStatus := <-c.statusIconChan
+			subMenuGetAdminCreds.Enable()
+			subMenuGetRegularCreds.Enable()
 			switch appStatus {
 			case StatusGood:
 				mAppMessage.SetIcon(getIcon("checkmark-32x32.png"))
