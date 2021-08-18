@@ -705,7 +705,8 @@ func (b *Broker) generateTokenCredentials(accountName string, roleName string, u
 		Region:       region,
 		Expiration:   time.Now().Add(time.Second * profileAssumeRoleDurationSeconds),
 	}
-	b.auditLogger.Printf("Token credentials generated for: %s on account %s role %s", userName, accountName, roleName)
+	b.auditLogger.Printf("Token credentials (KeyId %s) generated for: %s on account %s role %s",
+		*assumeRoleOutput.Credentials.AccessKeyId, userName, accountName, roleName)
 	return &outVal, nil
 }
 
