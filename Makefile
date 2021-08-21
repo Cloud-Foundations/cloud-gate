@@ -21,6 +21,10 @@ all:
 get-deps:
 	go get -t ./...
 
+update-deps:
+	go get -u ./...
+	go mod tidy
+
 clean:
 	rm -f bin/*
 	rm -f cloud-gate-*.tar.gz
