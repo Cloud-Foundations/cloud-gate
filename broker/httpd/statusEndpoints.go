@@ -22,31 +22,30 @@ func (s *Server) displayUnsealForm(w http.ResponseWriter, r *http.Request, authU
 }
 
 func (s *Server) unsealingHandler(w http.ResponseWriter, r *http.Request) {
+	s.logger.Debugf(1, "unsealingHandler: method: %s\n", r.Method)
 	authUser, err := s.getRemoteUserName(w, r)
 	if err != nil {
+		s.logger.Printf("unsealingHandler: could not get username: %s\n", err)
 		return
 	}
 	w.(*instrumentedwriter.LoggingWriter).SetUsername(authUser)
 	switch r.Method {
 	case "GET":
-		s.logger.Debugf(3, "Got client GET connection")
 		s.displayUnsealForm(w, r, authUser)
 		return
 	case "POST":
-		s.logger.Debugf(3, "Got client POST connection")
-		err = r.ParseForm()
-		if err != nil {
-			s.logger.Println(err)
+		if err := r.ParseForm(); err != nil {
+			s.logger.Printf("unsealingHandler: error parsing form: %s\n", err)
 			http.Error(w, "Error parsing form", http.StatusBadRequest)
 			return
 		}
 	default:
-		http.Error(w, "Error parsing form", http.StatusMethodNotAllowed)
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
 	}
-	validatedParams, err := s.getVerifyFormValues(r, []string{"unsealing_secret"}, "^[A-Za-z0-9_.-=+/]{4,40}$")
+	validatedParams, err := s.getVerifyFormValues(r, []string{"unsealing_secret"}, "^[-A-Za-z0-9_.=+/]{4,40}$")
 	if err != nil {
-		s.logger.Println(err)
+		s.logger.Printf("unsealingHandler: validation error: %s\n", err)
 		http.Error(w, "Error parsing form", http.StatusBadRequest)
 		return
 	}
@@ -55,6 +54,8 @@ func (s *Server) unsealingHandler(w http.ResponseWriter, r *http.Request) {
 	for _, broker := range s.brokers {
 		ready, err := broker.ProcessNewUnsealingSecret(unsealingSecret)
 		if err != nil {
+			s.logger.Printf("unsealingHandler: error processing secret: %s\n",
+				err)
 			http.Error(w, "Error Processing Secret", http.StatusInternalServerError)
 			return
 		}
