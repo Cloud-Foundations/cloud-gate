@@ -17,6 +17,8 @@ VERSION=1.1.0
 all:
 	@cd $(GOPATH)/src; go install github.com/Cloud-Foundations/cloud-gate/cmd/*
 
+pathbuild:
+	@cd $(GOPATH)/src; GO111MODULE=no go install github.com/Cloud-Foundations/cloud-gate/cmd/*
 
 get-deps:
 	go get -t ./...
