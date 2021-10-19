@@ -457,7 +457,7 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 			c.loggerPrintf(1, "Timer expired")
 		case getAdmin := <-c.getCredsNowChan:
 			requestAdmin = getAdmin
-			c.loggerPrintf(1, "Got request for inmediate request")
+			c.loggerPrintf(1, "Got message for immediate request")
 		}
 
 	}
