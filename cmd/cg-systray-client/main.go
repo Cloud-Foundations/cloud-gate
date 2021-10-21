@@ -102,6 +102,7 @@ type cgClient struct {
 	oldBotoCompat        bool
 	appMessageChan       chan string
 	statusIconChan       chan int
+	getCredsNowChan      chan bool
 }
 
 func (c *cgClient) LoggerPrintf(level uint, format string, v ...interface{}) {
@@ -131,6 +132,7 @@ func NewClient(config AppConfigFile, excludeRoleRE *regexp.Regexp, includeRoleRE
 		logger:               logger,
 		appMessageChan:       make(chan string, defaultChanSize),
 		statusIconChan:       make(chan int, defaultChanSize),
+		getCredsNowChan:      make(chan bool, defaultChanSize),
 	}
 	return &client
 }
@@ -435,20 +437,29 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 		c.loggerPrintf(0, "Error Parsing Certificate: %s", err)
 		return err
 	}
+	requestAdmin := *askAdminRoles
 	for parsedCert.NotAfter.After(time.Now()) {
 		credentialCount, err := c.getCerts(cert, config.BaseURL, *crededentialFilename,
-			*askAdminRoles, config.OutputProfilePrefix,
+			requestAdmin, config.OutputProfilePrefix,
 			includeRoleRE, excludeRoleRE)
 		if err != nil {
 			c.logger.Printf("err=%s", err)
 			c.loggerPrintf(0, "Failure getting certs, retrying in (%s)", failureSleepDuration)
 			c.statusIconChan <- StatusWarn
 			time.Sleep(failureSleepDuration)
-		} else {
-			c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
-			c.statusIconChan <- StatusGood
-			time.Sleep(sleepDuration)
+			continue
 		}
+		c.statusIconChan <- StatusGood
+		requestAdmin = *askAdminRoles
+		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
+		select {
+		case <-time.After(sleepDuration):
+			c.loggerPrintf(1, "Timer expired")
+		case getAdmin := <-c.getCredsNowChan:
+			requestAdmin = getAdmin
+			c.loggerPrintf(1, "Got message for immediate request")
+		}
+
 	}
 	return nil
 }
@@ -497,12 +508,25 @@ func (c *cgClient) BackgroundLoop(config AppConfigFile, certFilename string, key
 func (c *cgClient) OnReady() {
 	systray.SetTooltip("CloudGate systray")
 	mAppMessage := systray.AddMenuItem("status", "CurrentMessage")
+	subMenuTop := systray.AddMenuItem("Get Credentials Now", "Get Credentials Immediately")
+	subMenuGetRegularCreds := subMenuTop.AddSubMenuItem("Regular", "Requests Credentials now, dont wait for timer")
+	subMenuGetAdminCreds := subMenuTop.AddSubMenuItem("Admin (sudo)", "Immediately request admin credentials (1h) ")
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
 	go func() {
-		<-mQuitOrig.ClickedCh
-		fmt.Println("Requesting quit")
-		systray.Quit()
-		fmt.Println("Finished quitting")
+		for {
+			select {
+			case <-subMenuGetAdminCreds.ClickedCh:
+				c.getCredsNowChan <- true
+				subMenuGetAdminCreds.Disable()
+			case <-subMenuGetRegularCreds.ClickedCh:
+				c.getCredsNowChan <- false
+				subMenuGetRegularCreds.Disable()
+			case <-mQuitOrig.ClickedCh:
+				fmt.Println("Requesting quit")
+				systray.Quit()
+				fmt.Println("Finished quitting")
+			}
+		}
 	}()
 	go func() {
 		for {
@@ -517,6 +541,8 @@ func (c *cgClient) OnReady() {
 		mAppMessage.SetIcon(getIcon("exclamation-32x32.png"))
 		for {
 			appStatus := <-c.statusIconChan
+			subMenuGetAdminCreds.Enable()
+			subMenuGetRegularCreds.Enable()
 			switch appStatus {
 			case StatusGood:
 				mAppMessage.SetIcon(getIcon("checkmark-32x32.png"))
