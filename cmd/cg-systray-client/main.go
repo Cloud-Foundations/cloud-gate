@@ -508,9 +508,9 @@ func (c *cgClient) BackgroundLoop(config AppConfigFile, certFilename string, key
 func (c *cgClient) OnReady() {
 	systray.SetTooltip("CloudGate systray")
 	mAppMessage := systray.AddMenuItem("status", "CurrentMessage")
-	subMenuTop := systray.AddMenuItem("Get Credentials Now", "Get Credentials Inmediately")
+	subMenuTop := systray.AddMenuItem("Get Credentials Now", "Get Credentials Immediately")
 	subMenuGetRegularCreds := subMenuTop.AddSubMenuItem("Regular", "Requests Credentials now, dont wait for timer")
-	subMenuGetAdminCreds := subMenuTop.AddSubMenuItem("Admin (sudo)", "Inmediartely request admin credentials (1h) ")
+	subMenuGetAdminCreds := subMenuTop.AddSubMenuItem("Admin (sudo)", "Immediately request admin credentials (1h) ")
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the whole app")
 	go func() {
 		for {
