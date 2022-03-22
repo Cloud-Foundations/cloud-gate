@@ -15,8 +15,12 @@ BINARY=cloud-gate
 VERSION=1.2.0
 
 all:
-	@cd $(GOPATH)/src; go install github.com/Cloud-Foundations/cloud-gate/cmd/*
+	cd cmd/cloud-gate; go install -ldflags "-X main.Version=${VERSION}"
+	cd cmd/cg-client; go install -ldflags "-X main.Version=${VERSION}"
+	cd cmd/cg-systray-client; go install -ldflags "-X main.Version=${VERSION}"
 
+build:
+	go build -ldflags "-X main.Version=${VERSION}" -o bin/   ./...
 
 get-deps:
 	go get -t ./...
@@ -35,8 +39,10 @@ ${BINARY}-${VERSION}.tar.gz:
 	mkdir ${BINARY}-${VERSION}
 	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" lib/ ${BINARY}-${VERSION}/lib/
 	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" cmd/ ${BINARY}-${VERSION}/cmd/
+	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" broker/ ${BINARY}-${VERSION}/broker/
+	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" docs/ ${BINARY}-${VERSION}/docs/
 	rsync -av  misc/ ${BINARY}-${VERSION}/misc/
-	cp LICENSE Makefile cloud-gate.spec README.md ${BINARY}-${VERSION}/
+	cp LICENSE Makefile cloud-gate.spec README.md go.mod go.sum ${BINARY}-${VERSION}/
 	tar -cvzf ${BINARY}-${VERSION}.tar.gz ${BINARY}-${VERSION}/
 	rm -rf ${BINARY}-${VERSION}/
 
