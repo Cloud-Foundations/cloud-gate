@@ -12,7 +12,7 @@ GIT_BRANCH2 = $(shell echo ${GIT_BRANCH} | rev | cut -d/ -f1 | rev)
 BINARY=cloud-gate
 #
 # # These are the values we want to pass for Version and BuildTime
-VERSION=1.1.0
+VERSION=1.2.0
 
 all:
 	@cd $(GOPATH)/src; go install github.com/Cloud-Foundations/cloud-gate/cmd/*
