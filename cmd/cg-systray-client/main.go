@@ -475,21 +475,21 @@ func (c *cgClient) BackgroundLoop(config AppConfigFile, certFilename string, key
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		c.loggerPrintf(2, "Certificalte loaded")
+		c.loggerPrintf(2, "Certificate loaded")
 		parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
 		if err != nil {
 			c.loggerPrintf(0, "Error Parsing Certificate: %s", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		c.loggerPrintf(2, "Certificalte parsed")
+		c.loggerPrintf(2, "Certificate parsed")
 		if parsedCert.NotAfter.Before(time.Now()) {
-			c.loggerPrintf(0, "Certificalte is expired")
+			c.loggerPrintf(0, "Certificate is expired")
 			//loggerPrintf(0, "keymaster certificate is expired, please run keymaster binary. Certificate expired at %s", parsedCert.NotAfter)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		c.loggerPrintf(0, "Certificalte is not expired exp=%s", parsedCert.NotAfter)
+		c.loggerPrintf(0, "Certificate is not expired exp=%s", parsedCert.NotAfter)
 
 		time.Sleep(2 * time.Second)
 		err = c.withCertFetchCredentials(config, cert, includeRoleRE, excludeRoleRE)
