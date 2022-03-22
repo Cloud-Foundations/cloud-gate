@@ -16,6 +16,8 @@ VERSION=1.2.0
 
 all:
 	cd cmd/cloud-gate; go install -ldflags "-X main.Version=${VERSION}"
+	cd cmd/cg-client; go install -ldflags "-X main.Version=${VERSION}"
+	cd cmd/cg-systray-client; go install -ldflags "-X main.Version=${VERSION}"
 
 build:
 	go build -ldflags "-X main.Version=${VERSION}" -o bin/   ./...
