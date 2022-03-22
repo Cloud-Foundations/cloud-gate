@@ -1,5 +1,5 @@
 # cloud-gate
-[![Build Status](https://travis-ci.org/Cloud-Foundations/cloud-gate.svg?branch=master)](https://travis-ci.org/Cloud-Foundations/cloud-gate)
+[![Build Status](https://github.com/Cloud-Foundations/cloud-gate/actions/workflows/test.yml/badge.svg?query=branch%3Amaster)](https://github.com/Cloud-Foundations/cloud-gate/actions/workflows/test.yml?query=branch%3Amaster)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Cloud-Foundations/cloud-gate)](https://goreportcard.com/report/github.com/Cloud-Foundations/cloud-gate)
 
 cloud-gate is a Cloud Authentication Broker. It uses an IDentity Provider (IDP)
