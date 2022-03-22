@@ -25,12 +25,12 @@ A web broker for accesing AWS and potentially other clouds
 
 
 %build
-make
+make build
 
 
 %install
 #%make_install
-%{__install} -Dp -m0755 ~/go/bin/cloud-gate %{buildroot}%{_bindir}/cloud-gate
+%{__install} -Dp -m0755 bin/cloud-gate %{buildroot}%{_bindir}/cloud-gate
 install -d %{buildroot}/usr/lib/systemd/system
 install -p -m 0644 misc/startup/cloud-gate.service %{buildroot}/usr/lib/systemd/system/cloud-gate.service
 install -d %{buildroot}/%{_datarootdir}/cloud-gate/customization_data/templates
