@@ -562,17 +562,17 @@ func (b *Broker) getUserAllowedAccounts(username string) ([]broker.PermittedAcco
 		b.userAllowedCredentialsMutex.Unlock()
 		return value, nil
 	}
-	value, err := b.getUserAllowedAccountsNonCached(username)
+	permittedAccounts, err := b.getUserAllowedAccountsNonCached(username)
 	if err != nil {
 		b.logger.Printf("getUserAllowedAccounts: Failure gettting userinfo for non-cached user: %s. Err: %s", username, err)
-		return value, err
+		return permittedAccounts, err
 	}
-	cachedEntry.PermittedAccounts = value
+	cachedEntry.PermittedAccounts = permittedAccounts
 	cachedEntry.Expiration = time.Now().Add(cacheDuration)
 	b.userAllowedCredentialsMutex.Lock()
 	b.userAllowedCredentialsCache[username] = cachedEntry
 	b.userAllowedCredentialsMutex.Unlock()
-	return value, nil
+	return permittedAccounts, nil
 }
 
 func (b *Broker) isUserAllowedToAssumeRole(username string, accountName string, roleName string) (bool, error) {
