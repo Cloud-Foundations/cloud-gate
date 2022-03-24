@@ -338,8 +338,7 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 		accountName)
 	assumeRoleOutput, region, err := b.withProfileAssumeRole(accountName, masterAWSProfileName, b.listRolesRoleName, "brokermaster")
 	if err != nil {
-		b.logger.Debugf(0, "cannot assume master role for account %s, err=%s", accountName, err)
-		return nil, err
+		return nil, fmt.Errorf("cannot assume master role: %s", err)
 	}
 	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v", accountName, assumeRoleOutput)
 
@@ -356,7 +355,9 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 	if err == nil {
 		return accountRoles, nil
 	}
-	b.logger.Printf("Doing fallback for accountName=%s", accountName)
+	b.logger.Printf(
+		"Failed listing roles for accountName=%s with master account: %s: doing fallback\n",
+		accountName, err)
 	// Master role does not work, try fallback with direct account
 	profileName := accountName
 	sessionCredentials, region, err := b.getCredentialsFromProfile(profileName)
