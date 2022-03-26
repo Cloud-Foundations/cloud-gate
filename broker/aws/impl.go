@@ -222,7 +222,7 @@ func (b *Broker) getCredentialsFromProfile(profileName string) (
 		if profileName == masterAWSProfileName {
 			return b.getCredentialsFromMetaData()
 		}
-		return nil, "", errors.New("invalid credentials name")
+		return nil, "", fmt.Errorf("invalid profileName: %s", profileName)
 	}
 	sessionCredentials := credentials.NewStaticCredentials(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
