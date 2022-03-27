@@ -226,6 +226,8 @@ func (b *Broker) getCredentialsFromProfile(profileName string) (
 	}
 	sessionCredentials := credentials.NewStaticCredentials(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
+	b.logger.Debugf(0, "Created credentials object for static profile: %s\n",
+		profileName)
 	return sessionCredentials, profileEntry.Region, nil
 }
 
@@ -238,6 +240,7 @@ func (b *Broker) getCredentialsFromMetaData() (
 	if creds == nil {
 		return nil, "", errors.New("unable to get EC2 role credentials")
 	}
+	b.logger.Debugln(0, "Created credentials object from metadata")
 	return creds, defaultRegion, nil
 }
 
