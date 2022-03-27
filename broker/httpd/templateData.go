@@ -213,7 +213,8 @@ const footerTemplateText = `
 <footer class="footer fixed-bottom">
 <hr>
 <center>
-Copyright 2018 Symantec Corporation. {{template "footer_extra"}}
+Copyright 2018 Symantec Corporation; 2019-2022 Cloud-Foundations.org.
+{{template "footer_extra"}}
 </center>
 </footer>
 {{end}}

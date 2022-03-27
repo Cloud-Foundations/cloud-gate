@@ -222,10 +222,12 @@ func (b *Broker) getCredentialsFromProfile(profileName string) (
 		if profileName == masterAWSProfileName {
 			return b.getCredentialsFromMetaData()
 		}
-		return nil, "", errors.New("invalid credentials name")
+		return nil, "", fmt.Errorf("invalid profileName: %s", profileName)
 	}
 	sessionCredentials := credentials.NewStaticCredentials(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
+	b.logger.Debugf(0, "Created credentials object for static profile: %s\n",
+		profileName)
 	return sessionCredentials, profileEntry.Region, nil
 }
 
@@ -238,6 +240,7 @@ func (b *Broker) getCredentialsFromMetaData() (
 	if creds == nil {
 		return nil, "", errors.New("unable to get EC2 role credentials")
 	}
+	b.logger.Debugln(0, "Created credentials object from metadata")
 	return creds, defaultRegion, nil
 }
 
@@ -338,8 +341,9 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 		accountName)
 	assumeRoleOutput, region, err := b.withProfileAssumeRole(accountName, masterAWSProfileName, b.listRolesRoleName, "brokermaster")
 	if err != nil {
-		b.logger.Debugf(0, "cannot assume master role for account %s, err=%s", accountName, err)
-		return nil, err
+		return nil, fmt.Errorf(
+			"profile: %s cannot assume role: %s in account: %s: %s",
+			masterAWSProfileName, b.listRolesRoleName, accountName, err)
 	}
 	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v", accountName, assumeRoleOutput)
 
@@ -356,7 +360,9 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 	if err == nil {
 		return accountRoles, nil
 	}
-	b.logger.Printf("Doing fallback for accountName=%s", accountName)
+	b.logger.Printf(
+		"Failed listing roles for accountName=%s with master account: %s: doing fallback\n",
+		accountName, err)
 	// Master role does not work, try fallback with direct account
 	profileName := accountName
 	sessionCredentials, region, err := b.getCredentialsFromProfile(profileName)
@@ -562,17 +568,17 @@ func (b *Broker) getUserAllowedAccounts(username string) ([]broker.PermittedAcco
 		b.userAllowedCredentialsMutex.Unlock()
 		return value, nil
 	}
-	value, err := b.getUserAllowedAccountsNonCached(username)
+	permittedAccounts, err := b.getUserAllowedAccountsNonCached(username)
 	if err != nil {
 		b.logger.Printf("getUserAllowedAccounts: Failure gettting userinfo for non-cached user: %s. Err: %s", username, err)
-		return value, err
+		return permittedAccounts, err
 	}
-	cachedEntry.PermittedAccounts = value
+	cachedEntry.PermittedAccounts = permittedAccounts
 	cachedEntry.Expiration = time.Now().Add(cacheDuration)
 	b.userAllowedCredentialsMutex.Lock()
 	b.userAllowedCredentialsCache[username] = cachedEntry
 	b.userAllowedCredentialsMutex.Unlock()
-	return value, nil
+	return permittedAccounts, nil
 }
 
 func (b *Broker) isUserAllowedToAssumeRole(username string, accountName string, roleName string) (bool, error) {
