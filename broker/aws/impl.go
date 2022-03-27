@@ -341,7 +341,9 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 		accountName)
 	assumeRoleOutput, region, err := b.withProfileAssumeRole(accountName, masterAWSProfileName, b.listRolesRoleName, "brokermaster")
 	if err != nil {
-		return nil, fmt.Errorf("cannot assume master role: %s", err)
+		return nil, fmt.Errorf(
+			"profile: %s cannot assume role: %s in account: %s: %s",
+			masterAWSProfileName, b.listRolesRoleName, accountName, err)
 	}
 	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v", accountName, assumeRoleOutput)
 
