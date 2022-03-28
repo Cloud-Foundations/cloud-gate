@@ -6,6 +6,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/aws/aws-sdk-go/service/sts"
+
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
@@ -38,6 +40,8 @@ type Broker struct {
 	credentialsFilename         string
 	logger                      log.DebugLogger
 	auditLogger                 log.DebugLogger
+	masterStsClient             *sts.STS
+	masterStsRegion             string
 	userAllowedCredentialsCache map[string]userAllowedCredentialsCacheEntry
 	userAllowedCredentialsMutex sync.Mutex
 	accountRoleCache            map[string]accountRoleCacheEntry

@@ -40,8 +40,9 @@ import (
 
 // TODO: these should come in from config
 const (
-	defaultRegion        = "us-west-2"
-	masterAWSProfileName = "broker-master"
+	profileAssumeRoleDurationSeconds = 3600
+	defaultRegion                    = "us-west-2"
+	masterAWSProfileName             = "broker-master"
 )
 
 var (
@@ -126,6 +127,27 @@ func (b *Broker) accountHumanNameFromName(accountName string) (string, error) {
 	return "", errors.New("accountNAme not found")
 }
 
+func (b *Broker) finishUnsealing() error {
+	sessionCredentials, region, err := b.getCredentialsFromProfile(
+		masterAWSProfileName)
+	if err != nil {
+		b.logger.Printf("Unable to get master credentials: %s\n", err)
+		return nil
+	}
+	masterSession, err := session.NewSession(
+		aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region))
+	if err != nil {
+		return err
+	}
+	if masterSession == nil {
+		return errors.New("masterSession == nil")
+	}
+	b.masterStsClient = sts.New(masterSession)
+	b.masterStsRegion = region
+	b.isUnsealedChannel <- nil
+	return nil
+}
+
 func (b *Broker) processNewUnsealingSecret(secret string) (ready bool, err error) {
 	// if already loaded then fast quit
 	// probably add some mutex here
@@ -168,8 +190,7 @@ func (b *Broker) processNewUnsealingSecret(secret string) (ready bool, err error
 
 func (b *Broker) loadCredentialsFile() (err error) {
 	if b.credentialsFilename == "" {
-		b.isUnsealedChannel <- nil
-		return nil
+		return b.finishUnsealing()
 	}
 	b.rawCredentialsFile, err = ioutil.ReadFile(b.credentialsFilename)
 	if err != nil {
@@ -208,9 +229,8 @@ func (b *Broker) loadCredentialsFrombytes(credentials []byte) error {
 	if len(b.profileCredentials) < 1 {
 		return errors.New("nothing loaded")
 	}
-	//it is now unsealed
-	b.isUnsealedChannel <- nil
-	return nil
+	// It is now unsealed.
+	return b.finishUnsealing()
 }
 
 // Returns an AWS *Credentials and region name, returns nil if credentials
@@ -226,29 +246,36 @@ func (b *Broker) getCredentialsFromProfile(profileName string) (
 	}
 	sessionCredentials := credentials.NewStaticCredentials(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
-	b.logger.Debugf(0, "Created credentials object for static profile: %s\n",
+	b.logger.Printf("Created credentials object for static profile: %s\n",
 		profileName)
 	return sessionCredentials, profileEntry.Region, nil
 }
 
 func (b *Broker) getCredentialsFromMetaData() (
 	*credentials.Credentials, string, error) {
+	metadataClient := ec2metadata.New(session.New(&aws.Config{}))
+	region, err := metadataClient.Region()
+	if err != nil {
+		return nil, "", errors.New("unable to get region from metadata client")
+	}
 	creds := credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{
-		Client:       ec2metadata.New(session.New(&aws.Config{})),
+		Client:       metadataClient,
 		ExpiryWindow: time.Minute,
 	})
 	if creds == nil {
 		return nil, "", errors.New("unable to get EC2 role credentials")
 	}
-	b.logger.Debugln(0, "Created credentials object from metadata")
-	return creds, defaultRegion, nil
+	b.logger.Println("Created credentials object from metadata")
+	return creds, region, nil
 }
 
-const profileAssumeRoleDurationSeconds = 3600
-
-func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
-	roleName string,
-	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
+func (b *Broker) getStsClient(profileName string) (*sts.STS, string, error) {
+	if profileName == masterAWSProfileName {
+		if b.masterStsClient == nil {
+			return nil, "", errors.New("no master STS client")
+		}
+		return b.masterStsClient, b.masterStsRegion, nil
+	}
 	sessionCredentials, region, err := b.getCredentialsFromProfile(profileName)
 	if err != nil {
 		return nil, "", err
@@ -266,6 +293,16 @@ func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 	}
 	stsClient := sts.New(masterSession)
 	b.logger.Debugf(2, "stsClient=%v", stsClient)
+	return stsClient, region, nil
+}
+
+func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
+	roleName string,
+	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
+	stsClient, region, err := b.getStsClient(profileName)
+	if err != nil {
+		return nil, "", err
+	}
 	var durationSeconds int64
 	durationSeconds = profileAssumeRoleDurationSeconds
 	accountID, err := b.accountIDFromName(accountName)
