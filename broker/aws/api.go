@@ -44,10 +44,10 @@ type Broker struct {
 	masterStsRegion             string
 	userAllowedCredentialsCache map[string]userAllowedCredentialsCacheEntry
 	userAllowedCredentialsMutex sync.Mutex
-	accountRoleCache            map[string]accountRoleCacheEntry
+	accountRoleCache            map[string]accountRoleCacheEntry // K: acc. name
 	accountRoleMutex            sync.Mutex
 	isUnsealedChannel           chan error
-	profileCredentials          map[string]awsProfileEntry
+	profileCredentials          map[string]awsProfileEntry // Key: profile name
 	rawCredentialsFile          []byte
 	listRolesRoleName           string
 	listRolesSemaphore          *semaphore.Weighted
