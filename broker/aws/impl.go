@@ -27,13 +27,13 @@ import (
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo/filter"
 	"github.com/Cloud-Foundations/golib/pkg/log"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	//"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
+	//"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"gopkg.in/ini.v1"
 )
@@ -215,8 +215,8 @@ func (b *Broker) loadCredentialsFrombytes(credentials []byte) error {
 
 // Returns an AWS *Credentials and region name, returns nil if credentials
 // cannot be found.
-func (b *Broker) getCredentialsFromProfile(profileName string) (
-	*credentials.Credentials, string, error) {
+func (b *Broker) getCredentialsProviderFromProfile(profileName string) (
+	aws.CredentialsProvider, string, error) {
 	profileEntry, ok := b.profileCredentials[profileName]
 	if !ok {
 		if profileName == masterAWSProfileName {
@@ -224,21 +224,46 @@ func (b *Broker) getCredentialsFromProfile(profileName string) (
 		}
 		return nil, "", errors.New("invalid credentials name")
 	}
-	sessionCredentials := credentials.NewStaticCredentials(
+	provider := credentials.NewStaticCredentialsProvider(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
-	return sessionCredentials, profileEntry.Region, nil
+	/*
+		appCreds := aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			profileEntry.AccessKeyID, profileEntry.SecretAccessKey, ""))
+	*/
+	/*
+		sessionCredentials := credentials.NewStaticCredentials(
+			profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
+	*/
+	//sessionCredentials, err := appCreds.Retrieve(context.TODO())
+	return provider, profileEntry.Region, nil
 }
 
 func (b *Broker) getCredentialsFromMetaData() (
-	*credentials.Credentials, string, error) {
-	creds := credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{
-		Client:       ec2metadata.New(session.New(&aws.Config{})),
-		ExpiryWindow: time.Minute,
-	})
-	if creds == nil {
-		return nil, "", errors.New("unable to get EC2 role credentials")
-	}
-	return creds, defaultRegion, nil
+	aws.CredentialsProvider, string, error) {
+	//ctx := context.TODO()
+	/*
+		cfg, err := config.LoadDefaultConfig(ctx)
+		if err != nil {
+			return nil, "", errors.New("unable to get EC2 role credentials, failed config")
+		}
+		provider := imds.NewFromConfig(cfg)
+		ccache := aws.NewCredentialsCache(provider)
+	*/
+	provider := ec2rolecreds.New()
+	/*
+		creds := credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{
+			Client:       ec2metadata.New(session.New(&aws.Config{})),
+			ExpiryWindow: time.Minute,
+		})
+	*/
+	/*
+		creds, err := provider.Retrieve(ctx)
+		if err == nil {
+			return nil, "", fmt.Errorf("failed to retreive EC2 role  credentials")
+		}
+	*/
+
+	return provider, defaultRegion, nil
 }
 
 const profileAssumeRoleDurationSeconds = 3600
@@ -246,24 +271,34 @@ const profileAssumeRoleDurationSeconds = 3600
 func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 	roleName string,
 	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
-	sessionCredentials, region, err := b.getCredentialsFromProfile(profileName)
+	ctx := context.TODO()
+	credentialProvider, region, err := b.getCredentialsProviderFromProfile(profileName)
 	if err != nil {
 		return nil, "", err
 	}
-	if sessionCredentials == nil {
+
+	if region == "" {
 		return nil, "", fmt.Errorf("No valid profile=%s", profileName)
 	}
-	masterSession, err := session.NewSession(
-		aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region))
-	if err != nil {
-		return nil, "", err
+	/*
+
+		masterSession, err := session.NewSession(
+			aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region))
+		if err != nil {
+			return nil, "", err
+		}
+		if masterSession == nil {
+			return nil, "", errors.New("masterSession == nil")
+		}
+	*/
+
+	stsOptions := sts.Options{
+		Credentials: credentialProvider,
+		Region:      region,
 	}
-	if masterSession == nil {
-		return nil, "", errors.New("masterSession == nil")
-	}
-	stsClient := sts.New(masterSession)
+	stsClient := sts.New(stsOptions)
 	b.logger.Debugf(2, "stsClient=%v", stsClient)
-	var durationSeconds int64
+	var durationSeconds int32
 	durationSeconds = profileAssumeRoleDurationSeconds
 	accountID, err := b.accountIDFromName(accountName)
 	if err != nil {
@@ -282,7 +317,7 @@ func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 		RoleSessionName: &roleSessionName,
 	}
 	awsAssumeRoleAttempt.WithLabelValues(accountName, roleName).Inc()
-	assumeRoleOutput, err := stsClient.AssumeRole(&assumeRoleInput)
+	assumeRoleOutput, err := stsClient.AssumeRole(ctx, &assumeRoleInput)
 	if err == nil {
 		awsAssumeRoleSuccess.WithLabelValues(accountName, roleName).Inc()
 	}
@@ -291,9 +326,12 @@ func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 
 const getAWSRolesTimeout = 10 * time.Second
 
-func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accountName string) ([]string, error) {
-	iamClient := iam.New(validSession)
-	var maxItems int64
+func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aws.CredentialsProvider, accountName string) ([]string, error) {
+	iamOptions := iam.Options{
+		Credentials: credentialsProvider,
+	}
+	iamClient := iam.New(iamOptions)
+	var maxItems int32
 	maxItems = 500
 	listRolesInput := iam.ListRolesInput{MaxItems: &maxItems}
 	var roleNames []string
@@ -305,28 +343,46 @@ func (b *Broker) withSessionGetAWSRoleList(validSession *session.Session, accoun
 	}
 	defer b.listRolesSemaphore.Release(1)
 
-	c := make(chan error, 1)
-	go func() {
-		awsListRolesAttempt.WithLabelValues(accountName).Inc()
-		err := iamClient.ListRolesPages(&listRolesInput,
-			func(listRolesOutput *iam.ListRolesOutput, lastPage bool) bool {
-				b.logger.Debugf(2, "listrolesoutput =%v", listRolesOutput)
-				b.logger.Debugf(2, "loop, lastPage=%s", lastPage)
-				for _, role := range listRolesOutput.Roles {
-					roleNames = append(roleNames, *role.RoleName)
-				}
-				return !lastPage
-			})
-		c <- err
-	}()
-	select {
-	case getRolesErr := <-c:
-		if getRolesErr != nil {
-			return nil, getRolesErr
+	paginator := iam.NewListRolesPaginator(iamClient, &listRolesInput)
+	for paginator.HasMorePages() {
+		listRolesOutput, err := paginator.NextPage(ctx)
+		if err != nil {
+			// handle error
+			return nil, err
 		}
-	case <-time.After(getAWSRolesTimeout):
-		return nil, fmt.Errorf("AWS Get roles had a timeout for account %s", accountName)
+		for _, role := range listRolesOutput.Roles {
+			roleNames = append(roleNames, *role.RoleName)
+		}
+		//totalObjects += len(output.Contents)
 	}
+	/*
+		c := make(chan error, 1)
+		go func() {
+			awsListRolesAttempt.WithLabelValues(accountName).Inc()
+
+			paginator := iam.NewListRolesPaginator(client, listRolesInput)
+
+
+			err := iamClient.ListRolesPages(&listRolesInput,
+				func(listRolesOutput *iam.ListRolesOutput, lastPage bool) bool {
+					b.logger.Debugf(2, "listrolesoutput =%v", listRolesOutput)
+					b.logger.Debugf(2, "loop, lastPage=%s", lastPage)
+					for _, role := range listRolesOutput.Roles {
+						roleNames = append(roleNames, *role.RoleName)
+					}
+					return !lastPage
+				})
+			c <- err
+		}()
+		select {
+		case getRolesErr := <-c:
+			if getRolesErr != nil {
+				return nil, getRolesErr
+			}
+		case <-time.After(getAWSRolesTimeout):
+			return nil, fmt.Errorf("AWS Get roles had a timeout for account %s", accountName)
+		}
+	*/
 	awsListRolesSuccess.WithLabelValues(accountName).Inc()
 	sort.Strings(roleNames)
 	b.logger.Debugf(1, "roleNames(v =%v)", roleNames)
@@ -341,12 +397,17 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 		b.logger.Debugf(0, "cannot assume master role for account %s, err=%s", accountName, err)
 		return nil, err
 	}
-	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v", accountName, assumeRoleOutput)
-
-	sessionCredentials := credentials.NewStaticCredentials(*assumeRoleOutput.Credentials.AccessKeyId,
+	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v region=%s", accountName, assumeRoleOutput, region)
+	/*
+		sessionCredentials := credentials.NewStaticCredentials(*assumeRoleOutput.Credentials.AccessKeyId,
+			*assumeRoleOutput.Credentials.SecretAccessKey, *assumeRoleOutput.Credentials.SessionToken)
+		assumedSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
+		return b.withSessionGetAWSRoleList(assumedSession, accountName)
+	*/
+	provider := credentials.NewStaticCredentialsProvider(
+		*assumeRoleOutput.Credentials.AccessKeyId,
 		*assumeRoleOutput.Credentials.SecretAccessKey, *assumeRoleOutput.Credentials.SessionToken)
-	assumedSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
-	return b.withSessionGetAWSRoleList(assumedSession, accountName)
+	return b.withAWSCredentialsProviderGetAWSRoleList(provider, accountName)
 }
 
 func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, error) {
@@ -359,18 +420,19 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 	b.logger.Printf("Doing fallback for accountName=%s", accountName)
 	// Master role does not work, try fallback with direct account
 	profileName := accountName
-	sessionCredentials, region, err := b.getCredentialsFromProfile(profileName)
+	provider, region, err := b.getCredentialsProviderFromProfile(profileName)
 	if err != nil {
 		return nil, err
 	}
-
-	if sessionCredentials == nil {
-		return nil, errors.New(fmt.Sprintf("no valid profile=%s", profileName))
-	}
-
+	b.logger.Debugf(1, "Got region=%s", region)
+	/*
+		if sessionCredentials == nil {
+			return nil, errors.New(fmt.Sprintf("no valid profile=%s", profileName))
+		}
+	*/
 	// This is strange, no error calling?
-	accountSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
-	return b.withSessionGetAWSRoleList(accountSession, accountName)
+	//accountSession := session.Must(session.NewSession(aws.NewConfig().WithCredentials(sessionCredentials).WithRegion(region)))
+	return b.withAWSCredentialsProviderGetAWSRoleList(provider, accountName)
 }
 
 const roleCacheDuration = time.Second * 1800
