@@ -31,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
@@ -251,7 +252,20 @@ func (b *Broker) getCredentialsProviderFromProfile(profileName string) (
 func (b *Broker) getCredentialsProviderFromMetaData() (
 	aws.CredentialsProvider, string, error) {
 	provider := ec2rolecreds.New()
-	return provider, defaultRegion, nil
+
+	// TODO: find cleaner way to get the region on the v2 sdk
+	ctx := context.TODO()
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return provider, defaultRegion, err
+	}
+	client := imds.NewFromConfig(cfg)
+	getRegionInput := imds.GetRegionInput{}
+	regionOutput, err := client.GetRegion(ctx, &getRegionInput)
+	if err != nil {
+		return provider, defaultRegion, err
+	}
+	return provider, regionOutput.Region, nil
 }
 
 func (b *Broker) getStsClient(profileName string) (*sts.Client, string, error) {

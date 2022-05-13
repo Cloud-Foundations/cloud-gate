@@ -15,12 +15,9 @@ RUN git branch -a
 RUN git checkout $GIT_BRANCH
 RUN git rev-parse --abbrev-ref HEAD
 RUN git log -1 --pretty=format:"%H"
-#RUN time go get -u ./...
-#RUN time go get -t ./...
 
 
 # install
 COPY cloud-gate.spec-docker.patch $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
-#RUN patch cloud-gate.spec cloud-gate.spec-docker.patch
 RUN make rpm
 RUN alien -d -c `find /root/rpmbuild/RPMS/x86_64/ -name *.rpm`
