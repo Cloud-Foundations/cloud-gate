@@ -6,6 +6,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+
 	"github.com/Cloud-Foundations/cloud-gate/broker"
 	"github.com/Cloud-Foundations/cloud-gate/broker/configuration"
 	"github.com/Cloud-Foundations/golib/pkg/auth/userinfo"
@@ -38,12 +40,14 @@ type Broker struct {
 	credentialsFilename         string
 	logger                      log.DebugLogger
 	auditLogger                 log.DebugLogger
+	masterStsClient             *sts.Client
+	masterStsRegion             string
 	userAllowedCredentialsCache map[string]userAllowedCredentialsCacheEntry
 	userAllowedCredentialsMutex sync.Mutex
-	accountRoleCache            map[string]accountRoleCacheEntry
+	accountRoleCache            map[string]accountRoleCacheEntry // K: acc. name
 	accountRoleMutex            sync.Mutex
 	isUnsealedChannel           chan error
-	profileCredentials          map[string]awsProfileEntry
+	profileCredentials          map[string]awsProfileEntry // Key: profile name
 	rawCredentialsFile          []byte
 	listRolesRoleName           string
 	listRolesSemaphore          *semaphore.Weighted

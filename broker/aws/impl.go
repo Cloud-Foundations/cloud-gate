@@ -39,8 +39,9 @@ import (
 
 // TODO: these should come in from config
 const (
-	defaultRegion        = "us-west-2"
-	masterAWSProfileName = "broker-master"
+	profileAssumeRoleDurationSeconds = 3600
+	defaultRegion                    = "us-west-2"
+	masterAWSProfileName             = "broker-master"
 )
 
 var (
@@ -125,6 +126,27 @@ func (b *Broker) accountHumanNameFromName(accountName string) (string, error) {
 	return "", errors.New("accountNAme not found")
 }
 
+func (b *Broker) finishUnsealing() error {
+	credentialProvider, region, err := b.getCredentialsProviderFromProfile(
+		masterAWSProfileName)
+	if err != nil {
+		b.logger.Printf("Unable to get master credentials: %s\n", err)
+		return nil
+	}
+	if region == "" {
+		b.logger.Printf("Unable to get master credentials empty region")
+		return nil
+	}
+	stsOptions := sts.Options{
+		Credentials: credentialProvider,
+		Region:      region,
+	}
+	b.masterStsClient = sts.New(stsOptions)
+	b.masterStsRegion = region
+	b.isUnsealedChannel <- nil
+	return nil
+}
+
 func (b *Broker) processNewUnsealingSecret(secret string) (ready bool, err error) {
 	// if already loaded then fast quit
 	// probably add some mutex here
@@ -167,8 +189,7 @@ func (b *Broker) processNewUnsealingSecret(secret string) (ready bool, err error
 
 func (b *Broker) loadCredentialsFile() (err error) {
 	if b.credentialsFilename == "" {
-		b.isUnsealedChannel <- nil
-		return nil
+		return b.finishUnsealing()
 	}
 	b.rawCredentialsFile, err = ioutil.ReadFile(b.credentialsFilename)
 	if err != nil {
@@ -207,9 +228,8 @@ func (b *Broker) loadCredentialsFrombytes(credentials []byte) error {
 	if len(b.profileCredentials) < 1 {
 		return errors.New("nothing loaded")
 	}
-	//it is now unsealed
-	b.isUnsealedChannel <- nil
-	return nil
+	// It is now unsealed.
+	return b.finishUnsealing()
 }
 
 // Returns an AWS *Credentials and region name, returns nil if credentials
@@ -221,7 +241,7 @@ func (b *Broker) getCredentialsProviderFromProfile(profileName string) (
 		if profileName == masterAWSProfileName {
 			return b.getCredentialsProviderFromMetaData()
 		}
-		return nil, "", errors.New("invalid credentials name")
+		return nil, "", fmt.Errorf("invalid profileName: %s", profileName)
 	}
 	provider := credentials.NewStaticCredentialsProvider(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
@@ -234,26 +254,54 @@ func (b *Broker) getCredentialsProviderFromMetaData() (
 	return provider, defaultRegion, nil
 }
 
-const profileAssumeRoleDurationSeconds = 3600
-
-func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
-	roleName string,
-	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
-	ctx := context.TODO()
+func (b *Broker) getStsClient(profileName string) (*sts.Client, string, error) {
+	if profileName == masterAWSProfileName {
+		if b.masterStsClient == nil {
+			return nil, "", errors.New("no master STS client")
+		}
+		return b.masterStsClient, b.masterStsRegion, nil
+	}
 	credentialProvider, region, err := b.getCredentialsProviderFromProfile(profileName)
 	if err != nil {
-		b.logger.Debugf(1, "withProfileAssumeRole: failed to get credentialProvider err=%s", err)
+		b.logger.Printf("Unable to get master credentials: %s\n", err)
 		return nil, "", err
 	}
-
 	if region == "" {
-		return nil, "", fmt.Errorf("No valid profile=%s", profileName)
+		b.logger.Printf("Unable to get master credentials empty region")
+		return nil, "", err
 	}
 	stsOptions := sts.Options{
 		Credentials: credentialProvider,
 		Region:      region,
 	}
 	stsClient := sts.New(stsOptions)
+	b.logger.Debugf(2, "stsClient=%v", stsClient)
+	return stsClient, region, nil
+}
+
+func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
+	roleName string,
+	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
+	ctx := context.TODO() /*
+		credentialProvider, region, err := b.getCredentialsProviderFromProfile(profileName)
+		if err != nil {
+			b.logger.Debugf(1, "withProfileAssumeRole: failed to get credentialProvider err=%s", err)
+			return nil, "", err
+		}
+
+		if region == "" {
+			return nil, "", fmt.Errorf("No valid profile=%s", profileName)
+		}
+		stsOptions := sts.Options{
+			Credentials: credentialProvider,
+			Region:      region,
+		}
+		stsClient := sts.New(stsOptions)
+	*/
+	stsClient, region, err := b.getStsClient(profileName)
+	if err != nil {
+		return nil, "", err
+	}
 	b.logger.Debugf(2, "stsClient=%v", stsClient)
 	var durationSeconds int32
 	durationSeconds = profileAssumeRoleDurationSeconds
@@ -305,7 +353,7 @@ func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aw
 	b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: after semapore adquired")
 	c := make(chan error, 1)
 
-	// TODO: replace this select timeout selection by an appropiate context 
+	// TODO: replace this select timeout selection by an appropiate context
 	go func() {
 		awsListRolesAttempt.WithLabelValues(accountName).Inc()
 		paginator := iam.NewListRolesPaginator(iamClient, &listRolesInput)
@@ -342,8 +390,9 @@ func (b *Broker) masterGetAWSRolesForAccount(accountName string) ([]string, erro
 		accountName)
 	assumeRoleOutput, region, err := b.withProfileAssumeRole(accountName, masterAWSProfileName, b.listRolesRoleName, "brokermaster")
 	if err != nil {
-		b.logger.Debugf(0, "cannot assume master role for account %s, err=%s", accountName, err)
-		return nil, err
+		return nil, fmt.Errorf(
+			"profile: %s cannot assume role: %s in account: %s: %s",
+			masterAWSProfileName, b.listRolesRoleName, accountName, err)
 	}
 	b.logger.Debugf(2, "assume role success for account=%s, roleoutput=%v region=%s", accountName, assumeRoleOutput, region)
 	provider := credentials.NewStaticCredentialsProvider(
@@ -359,7 +408,9 @@ func (b *Broker) getAWSRolesForAccountNonCached(accountName string) ([]string, e
 	if err == nil {
 		return accountRoles, nil
 	}
-	b.logger.Printf("Doing fallback for accountName=%s", accountName)
+	b.logger.Printf(
+		"Failed listing roles for accountName=%s with master account: %s: doing fallback\n",
+		accountName, err)
 	// Master role does not work, try fallback with direct account
 	profileName := accountName
 	provider, region, err := b.getCredentialsProviderFromProfile(profileName)
@@ -559,17 +610,17 @@ func (b *Broker) getUserAllowedAccounts(username string) ([]broker.PermittedAcco
 		b.userAllowedCredentialsMutex.Unlock()
 		return value, nil
 	}
-	value, err := b.getUserAllowedAccountsNonCached(username)
+	permittedAccounts, err := b.getUserAllowedAccountsNonCached(username)
 	if err != nil {
 		b.logger.Printf("getUserAllowedAccounts: Failure gettting userinfo for non-cached user: %s. Err: %s", username, err)
-		return value, err
+		return permittedAccounts, err
 	}
-	cachedEntry.PermittedAccounts = value
+	cachedEntry.PermittedAccounts = permittedAccounts
 	cachedEntry.Expiration = time.Now().Add(cacheDuration)
 	b.userAllowedCredentialsMutex.Lock()
 	b.userAllowedCredentialsCache[username] = cachedEntry
 	b.userAllowedCredentialsMutex.Unlock()
-	return value, nil
+	return permittedAccounts, nil
 }
 
 func (b *Broker) isUserAllowedToAssumeRole(username string, accountName string, roleName string) (bool, error) {
