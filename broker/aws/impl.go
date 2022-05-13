@@ -361,6 +361,7 @@ func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aw
 			if err != nil {
 				b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: faled to get roles, account=%s err=%s", accountName, err)
 				c <- err
+				return
 			}
 			for _, role := range listRolesOutput.Roles {
 				roleNames = append(roleNames, *role.RoleName)
