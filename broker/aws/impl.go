@@ -296,22 +296,7 @@ func (b *Broker) getStsClient(profileName string) (*sts.Client, string, error) {
 func (b *Broker) withProfileAssumeRole(accountName string, profileName string,
 	roleName string,
 	roleSessionName string) (*sts.AssumeRoleOutput, string, error) {
-	ctx := context.TODO() /*
-		credentialProvider, region, err := b.getCredentialsProviderFromProfile(profileName)
-		if err != nil {
-			b.logger.Debugf(1, "withProfileAssumeRole: failed to get credentialProvider err=%s", err)
-			return nil, "", err
-		}
-
-		if region == "" {
-			return nil, "", fmt.Errorf("No valid profile=%s", profileName)
-		}
-		stsOptions := sts.Options{
-			Credentials: credentialProvider,
-			Region:      region,
-		}
-		stsClient := sts.New(stsOptions)
-	*/
+	ctx := context.TODO()
 	stsClient, region, err := b.getStsClient(profileName)
 	if err != nil {
 		return nil, "", err
