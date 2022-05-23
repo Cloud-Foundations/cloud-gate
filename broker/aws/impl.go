@@ -246,6 +246,8 @@ func (b *Broker) getCredentialsProviderFromProfile(profileName string) (
 	}
 	provider := credentials.NewStaticCredentialsProvider(
 		profileEntry.AccessKeyID, profileEntry.SecretAccessKey, "")
+	b.logger.Debugf(1, "Created provider object for static profile: %s\n",
+		profileName)
 	return provider, profileEntry.Region, nil
 }
 
@@ -265,6 +267,7 @@ func (b *Broker) getCredentialsProviderFromMetaData() (
 	if err != nil {
 		return provider, defaultRegion, err
 	}
+	b.logger.Debugf(1, "Created credentials object from metadata")
 	return provider, regionOutput.Region, nil
 }
 
@@ -333,7 +336,7 @@ const getAWSRolesTimeout = 10 * time.Second
 func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aws.CredentialsProvider, awsRegion string, accountName string) ([]string, error) {
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(credentialsProvider), config.WithRegion(awsRegion))
 	if err != nil {
-		b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: fail to create new config err=%s", err)
+		b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: failed to create new config err=%s", err)
 		return nil, err
 	}
 	iamClient := iam.NewFromConfig(cfg)
@@ -349,7 +352,7 @@ func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aw
 	}
 	defer b.listRolesSemaphore.Release(1)
 
-	b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: after semapore adquired")
+	b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: after semapore acquired")
 	c := make(chan error, 1)
 
 	// TODO: replace this select timeout selection by an appropiate context
@@ -359,7 +362,7 @@ func (b *Broker) withAWSCredentialsProviderGetAWSRoleList(credentialsProvider aw
 		for paginator.HasMorePages() {
 			listRolesOutput, err := paginator.NextPage(ctx)
 			if err != nil {
-				b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: faled to get roles, account=%s err=%s", accountName, err)
+				b.logger.Debugf(1, "withAWSCredentialsProviderGetAWSRoleList: failed to get roles, account=%s err=%s", accountName, err)
 				c <- err
 				return
 			}
