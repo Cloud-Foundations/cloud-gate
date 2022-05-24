@@ -1,7 +1,8 @@
-FROM golang:1.14-stretch
+FROM golang:1.17-bullseye
 RUN set -ex; \
     apt update; \
-    apt install -y git make gcc time musl-dev rpm rsync alien
+    apt install -y git make gcc time musl-dev rpm rsync alien libgtk-3-dev libayatana-appindicator3-dev libayatana-appindicator-dev
+RUN apt search libayatana
 ARG GIT_COMMIT
 ARG GIT_BRANCH
 RUN git clone https://github.com/Cloud-Foundations/cloud-gate $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
@@ -14,11 +15,9 @@ RUN git branch -a
 RUN git checkout $GIT_BRANCH
 RUN git rev-parse --abbrev-ref HEAD
 RUN git log -1 --pretty=format:"%H"
-RUN time go get -u ./...
-RUN time go get -t ./...
+
 
 # install
 COPY cloud-gate.spec-docker.patch $GOPATH/src/github.com/Cloud-Foundations/cloud-gate
-RUN patch cloud-gate.spec cloud-gate.spec-docker.patch
 RUN make rpm
 RUN alien -d -c `find /root/rpmbuild/RPMS/x86_64/ -name *.rpm`
