@@ -1,4 +1,4 @@
-FROM golang:1.14-stretch
+FROM golang:1.18-stretch
 RUN set -ex; \
     apt update; \
     apt install -y git make gcc time musl-dev rpm rsync alien
