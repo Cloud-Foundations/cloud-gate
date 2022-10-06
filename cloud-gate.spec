@@ -1,5 +1,5 @@
 Name:           cloud-gate
-Version:        1.2.1
+Version:        1.3.2
 Release:        1%{?dist}
 Summary:        Access broker for clouds
 

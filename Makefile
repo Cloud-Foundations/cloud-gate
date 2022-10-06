@@ -12,7 +12,7 @@ GIT_BRANCH2 = $(shell echo ${GIT_BRANCH} | rev | cut -d/ -f1 | rev)
 BINARY=cloud-gate
 #
 # # These are the values we want to pass for Version and BuildTime
-VERSION=1.2.1
+VERSION=1.3.2
 
 all:
 	cd cmd/cloud-gate; go install -ldflags "-X main.Version=${VERSION}"
@@ -68,7 +68,7 @@ test:
 dockerpackagebuild:
 	@echo GIT_COMMIT=$(GIT_COMMIT)
 	@echo GIT_BRANCH2=$(GIT_BRANCH2)
-	docker build -f Dockerfile.packagebuilder --build-arg GIT_COMMIT=$(GIT_COMMIT) -t cloud-gate-packagebuilder .
+	docker build -f Dockerfile.packagebuilder --build-arg GIT_COMMIT=$(GIT_COMMIT) -t cloud-gate-packagebuilder --no-cache .
 	docker run cloud-gate-packagebuilder cat /root/rpmbuild/RPMS/x86_64/cloud-gate-${VERSION}-1.x86_64.rpm > cloud-gate-${VERSION}-1.x86_64.rpm
 	docker run cloud-gate-packagebuilder cat cloud-gate_${VERSION}-2_amd64.deb > cloud-gate_${VERSION}-2_amd64.deb
-	docker run cloud-gate-packagebuilder cat /go/bin/cloud-gate > cloud-gate.linux
+	#docker run cloud-gate-packagebuilder cat /go/bin/cloud-gate > cloud-gate.linux

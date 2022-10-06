@@ -1,4 +1,4 @@
-VERSION=1.2.1
+VERSION=1.3.2
 ifeq ($(DEFAULT_BASE_URL),)
 #TEST := $(something else)
 DEFAULT_BASE_URL:="https://cloud-gate.example.net"
