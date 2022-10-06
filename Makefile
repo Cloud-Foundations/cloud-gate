@@ -12,7 +12,7 @@ GIT_BRANCH2 = $(shell echo ${GIT_BRANCH} | rev | cut -d/ -f1 | rev)
 BINARY=cloud-gate
 #
 # # These are the values we want to pass for Version and BuildTime
-VERSION=1.3.1
+VERSION=1.3.2
 
 all:
 	cd cmd/cloud-gate; go install -ldflags "-X main.Version=${VERSION}"
