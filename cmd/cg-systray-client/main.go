@@ -387,7 +387,7 @@ func (c *cgClient) getCerts(cert tls.Certificate, baseUrl string,
 	return credentialsGenerated, nil
 }
 
-//Assumes cert is pem ecoded
+// Assumes cert is pem ecoded
 func getCertExpirationTime(certFilename string) (time.Time, error) {
 	dat, err := ioutil.ReadFile(certFilename)
 	if err != nil {
@@ -451,13 +451,21 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 		}
 		c.statusIconChan <- StatusGood
 		requestAdmin = *askAdminRoles
-		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, time.Now().Add(sleepDuration).Format(time.RFC822))
-		select {
-		case <-time.After(sleepDuration):
-			c.loggerPrintf(1, "Timer expired")
-		case getAdmin := <-c.getCredsNowChan:
-			requestAdmin = getAdmin
-			c.loggerPrintf(1, "Got message for immediate request")
+		nextRequestTime := time.Now().Add(sleepDuration)
+		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, nextRequestTime.Format(time.RFC822))
+		done := false
+		for !done {
+			select {
+			case <-time.After(time.Second * 10):
+				if time.Now().After(nextRequestTime) {
+					c.loggerPrintf(1, "Timer expired")
+					done = true
+				}
+			case getAdmin := <-c.getCredsNowChan:
+				requestAdmin = getAdmin
+				c.loggerPrintf(1, "Got message for immediate request")
+				done = true
+			}
 		}
 
 	}
