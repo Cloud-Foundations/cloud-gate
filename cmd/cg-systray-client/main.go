@@ -453,17 +453,18 @@ func (c *cgClient) withCertFetchCredentials(config AppConfigFile, cert tls.Certi
 		requestAdmin = *askAdminRoles
 		nextRequestTime := time.Now().Add(sleepDuration)
 		c.loggerPrintf(0, "%d credentials successfully generated. Sleeping until (%s)", credentialCount, nextRequestTime.Format(time.RFC822))
-		for {
+		done := false
+		for !done {
 			select {
 			case <-time.After(time.Second * 10):
 				if time.Now().After(nextRequestTime) {
 					c.loggerPrintf(1, "Timer expired")
-					break
+					done = true
 				}
 			case getAdmin := <-c.getCredsNowChan:
 				requestAdmin = getAdmin
 				c.loggerPrintf(1, "Got message for immediate request")
-				break
+				done = true
 			}
 		}
 
