@@ -1,4 +1,4 @@
-FROM golang:1.18-bullseye
+FROM golang:1.20-bullseye
 RUN set -ex; \
     apt update; \
     apt upgrade -y; \
