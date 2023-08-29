@@ -7,6 +7,12 @@ such as [keymaster](https://github.com/Cloud-Foundations/keymaster) to authentic
 and then grants WebUI and API access to accounts and roles in a Cloud
 environment.
 
+## Build
+
+We use [getlantern/systray] (https://github.com/getlantern/systray) for the systray gui.
+Thus is you want to build the systray you will need the dependencies refered there.
+
+
 ## Contributions
 
 All contributions must be unencumbered. It is the responsibility of
@@ -16,7 +22,7 @@ patents and contracts.
 ## LICENSE
 
 Copyright 2018 Symantec Corporation.
-Copyright 2019 cloud-foundations.org
+Copyright 2019-2023 cloud-foundations.org
 
 Licensed under the Apache License, Version 2.0 (the “License”); you
 may not use this file except in compliance with the License.
