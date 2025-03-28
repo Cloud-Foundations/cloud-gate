@@ -716,7 +716,7 @@ func (b *Broker) getConsoleURLForAccountRole(accountName string, roleName string
 	}
 
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf(string(body))
+		return "", fmt.Errorf("resp=%s", string(body))
 	}
 	b.logger.Debugf(1, "resp=%s", string(body))
 
